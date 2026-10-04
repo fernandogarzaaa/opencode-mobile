@@ -19,21 +19,25 @@ import {
 	initializeSessionSync,
 } from "../../src/lib/sessionSync";
 import { useConnectionStore } from "../../src/stores/useConnectionStore";
+import { useApprovalsStore } from "../../src/stores/useApprovalsStore";
 import { useTheme } from "../../src/theme";
 import { SetupGate } from "../../src/components/layout/SetupGate";
+import ApprovalsScreen from "./approvals";
 import ChatScreen from "./chat";
 import DiffScreen from "./diff";
 import GitScreen from "./git";
 import TerminalScreen from "./terminal";
 
-type MainTab = "chat" | "diff" | "terminal" | "git";
+type MainTab = "approvals" | "chat" | "diff" | "terminal" | "git";
 
 export default function TabsLayout() {
 	const { colors } = useTheme();
 	const { isConnected, directory } = useConnectionStore();
-	const [activeTab, setActiveTab] = useState<MainTab>("chat");
+	// The approvals inbox is the killer screen: it is the default tab.
+	const [activeTab, setActiveTab] = useState<MainTab>("approvals");
 	const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
 	const [diffFileCount, setDiffFileCount] = useState(0);
+	const approvalCount = useApprovalsStore((s) => s.items.length);
 
 	// Session management state (shared across all tabs)
 	const [sessions, setSessions] = useState<Session[]>([]);
@@ -281,6 +285,8 @@ export default function TabsLayout() {
 
 	const renderContent = () => {
 		switch (activeTab) {
+			case "approvals":
+				return <ApprovalsScreen />;
 			case "chat":
 				return <ChatScreen />;
 			case "git":
@@ -290,7 +296,7 @@ export default function TabsLayout() {
 			case "terminal":
 				return <TerminalScreen />;
 			default:
-				return <ChatScreen />;
+				return <ApprovalsScreen />;
 		}
 	};
 
@@ -308,6 +314,7 @@ export default function TabsLayout() {
 						onSessionsPress={openSessionSheet}
 						contextUsage={contextUsage}
 						diffFileCount={diffFileCount}
+						approvalCount={approvalCount}
 					/>
 					{/* Setup gate (OpenDots backlog #9): block tab content until
 					    the device is paired and credentials are configured.

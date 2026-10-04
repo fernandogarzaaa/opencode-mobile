@@ -1,12 +1,13 @@
 import { selectionAsync } from "expo-haptics";
 import { useCallback } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type ContextUsage, ContextUsageDisplay } from "@/components/chat";
 import {
 	ChatIcon,
 	CodeIcon,
 	GitBranchIcon,
+	LockIcon,
 	PlaylistAddIcon,
 	SettingsIcon,
 	TerminalIcon,
@@ -15,7 +16,7 @@ import { IconButton } from "@/components/ui";
 import { useTheme } from "@/theme";
 import { headerStyles } from "./Header.styles";
 
-type MainTab = "chat" | "diff" | "terminal" | "git";
+type MainTab = "approvals" | "chat" | "diff" | "terminal" | "git";
 
 interface TabConfig {
 	id: MainTab;
@@ -23,6 +24,7 @@ interface TabConfig {
 }
 
 const tabs: TabConfig[] = [
+	{ id: "approvals", label: "Approvals" },
 	{ id: "chat", label: "Chat" },
 	{ id: "diff", label: "Diff" },
 	{ id: "terminal", label: "Terminal" },
@@ -38,10 +40,13 @@ interface HeaderProps {
 	hasUpdate?: boolean;
 	contextUsage?: ContextUsage | null;
 	diffFileCount?: number;
+	approvalCount?: number;
 }
 
 function getTabIcon(tabId: MainTab, color: string, size: number) {
 	switch (tabId) {
+		case "approvals":
+			return <LockIcon color={color} size={size} />;
 		case "chat":
 			return <ChatIcon color={color} size={size} />;
 		case "diff":
@@ -62,6 +67,7 @@ export function Header({
 	hasUpdate = false,
 	contextUsage,
 	diffFileCount = 0,
+	approvalCount = 0,
 }: HeaderProps) {
 	const insets = useSafeAreaInsets();
 	const { colors } = useTheme();
@@ -109,6 +115,8 @@ export function Header({
 						{tabs.map((tab) => {
 							const isActive = activeTab === tab.id;
 							const showDiffDot = tab.id === "diff" && diffFileCount > 0;
+							const showApprovalBadge =
+								tab.id === "approvals" && approvalCount > 0;
 
 							return (
 								<Pressable
@@ -132,6 +140,24 @@ export function Header({
 												className={headerStyles.changeDot({})}
 												style={{ backgroundColor: colors.primary }}
 											/>
+										)}
+										{/* Pending-count badge on the approvals tab */}
+										{showApprovalBadge && (
+											<View
+												className={headerStyles.countBadge({})}
+												style={{
+													backgroundColor: colors.destructive,
+												}}
+											>
+												<Text
+													className={headerStyles.countBadgeText({})}
+													style={{
+														color: colors.destructiveForeground,
+													}}
+												>
+													{approvalCount > 99 ? "99+" : approvalCount}
+												</Text>
+											</View>
 										)}
 									</View>
 								</Pressable>
