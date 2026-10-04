@@ -1,4 +1,4 @@
-import { apiGet } from "../lib/httpClient";
+import { apiGet, apiPatch } from "../lib/httpClient";
 
 /**
  * Shadow Node artifacts API (durable documents).
@@ -12,9 +12,10 @@ import { apiGet } from "../lib/httpClient";
  *   GET /artifacts/{id}/versions   -> {artifact_id, versions} where each
  *     version is {version, created_at, size_bytes}
  *   GET /artifacts/{id}/versions/{version} -> full artifact JSON at version
- *   PATCH /artifacts/{id}          -> update body + optional
- *     expected_version (409 on conflict). Editing is out of scope for the
- *     mobile client; the API is exposed here for a follow-up.
+ *   PATCH /artifacts/{id}          -> {title?, kind?, content?,
+ *     expected_version?} -> updated full artifact JSON; 409 when
+ *     expected_version mismatches the stored version (optimistic
+ *     concurrency; artifacts.py:205-209).
  *   DELETE /artifacts/{id}
  *
  * ARTIFACT_KINDS = ("markdown", "html", "code", "csv", "json", "text")
@@ -64,6 +65,14 @@ interface ArtifactsVersionsResponse {
 	versions: ArtifactVersionInfo[];
 }
 
+/** PATCH body: all fields optional; expected_version enables the 409 check. */
+export interface ArtifactUpdateInput {
+	title?: string;
+	kind?: ArtifactKind;
+	content?: string;
+	expected_version?: number;
+}
+
 export const artifactsApi = {
 	/** List artifact metas, newest first (node default limit 20). */
 	async list(options?: {
@@ -106,6 +115,22 @@ export const artifactsApi = {
 	async getVersion(artifactId: string, version: number): Promise<Artifact> {
 		return apiGet<Artifact>(
 			`/artifacts/${encodeURIComponent(artifactId)}/versions/${version}`,
+		);
+	},
+
+	/**
+	 * Update title/content. Pass expected_version (the version that was
+	 * read) for optimistic concurrency: the node rejects with 409 when the
+	 * stored version has moved on. Throws ApiError(409) on conflict,
+	 * ApiError(404) when the artifact does not exist.
+	 */
+	async update(
+		artifactId: string,
+		update: ArtifactUpdateInput,
+	): Promise<Artifact> {
+		return apiPatch<Artifact>(
+			`/artifacts/${encodeURIComponent(artifactId)}`,
+			update,
 		);
 	},
 };
