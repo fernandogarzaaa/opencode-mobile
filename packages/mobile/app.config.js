@@ -64,6 +64,7 @@ export default {
       },
     },
     plugins: [
+      './plugins/withPrivacyManifest.js',
       'expo-router',
       [
         'expo-splash-screen',
