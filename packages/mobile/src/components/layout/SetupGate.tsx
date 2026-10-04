@@ -18,7 +18,7 @@ import { typography, useTheme } from "@/theme";
  * store (server URL + auth token persisted via SecureStore).
  */
 export function SetupGate({ children }: { children: ReactNode }) {
-	const { isInitialized, isConnected, serverUrl, authToken } = useConnectionStore();
+	const { isInitialized, isConnected, serverUrl, deviceId, deviceSecret } = useConnectionStore();
 	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
 
@@ -44,7 +44,7 @@ export function SetupGate({ children }: { children: ReactNode }) {
 		);
 	}
 
-	const isSetUp = isConnected && !!serverUrl && !!authToken;
+	const isSetUp = isConnected && !!serverUrl && !!deviceId && !!deviceSecret;
 	if (isSetUp) {
 		return <>{children}</>;
 	}
@@ -74,7 +74,7 @@ export function SetupGate({ children }: { children: ReactNode }) {
 							{ color: colors.mutedForeground, textAlign: "center", marginBottom: 20 },
 						]}
 					>
-						Pair this device with your OpenCode server to start chatting. Your
+						Pair this device with your Shadow Node to start. Your
 						credentials are stored securely on this device.
 					</Text>
 					<Button onPress={goToOnboarding} accessibilityLabel="Set up connection">

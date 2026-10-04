@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
+import { buildShadowHeaders } from "../lib/shadowAuth";
 import { useConnectionStore } from "../stores/useConnectionStore";
 
 const INITIAL_RECONNECT_DELAY_MS = 1000;
@@ -54,7 +55,7 @@ export function useEventStream(
 	sessionId: string | null,
 	onEvent: EventHandler,
 ) {
-	const { serverUrl, authToken, directory, isConnected } = useConnectionStore();
+	const { serverUrl, deviceId, deviceSecret, directory, isConnected } = useConnectionStore();
 	const xhrRef = useRef<XMLHttpRequest | null>(null);
 	const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
 		null,
@@ -145,7 +146,7 @@ export function useEventStream(
 	}, [isConnected, clearTimers]);
 
 	const connect = useCallback(() => {
-		if (!serverUrl || !authToken || !isConnected) {
+		if (!serverUrl || !deviceId || !deviceSecret || !isConnected) {
 			console.log("[EventStream] Not connected, skipping");
 			return;
 		}
@@ -194,7 +195,12 @@ export function useEventStream(
 		}, CONNECTION_TIMEOUT_MS);
 
 		xhr.open("GET", url.toString(), true);
-		xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
+		// Shadow-signed (the node has no /api/event yet; the chat rewire in
+		// build-order item 4 will point this at GET /agent/stream).
+		const shadowHeaders = buildShadowHeaders(deviceId, deviceSecret, "GET", "/api/event", "");
+		for (const [key, value] of Object.entries(shadowHeaders)) {
+			xhr.setRequestHeader(key, value);
+		}
 		xhr.setRequestHeader("Accept", "text/event-stream");
 		xhr.setRequestHeader("Cache-Control", "no-cache");
 
@@ -310,7 +316,8 @@ export function useEventStream(
 		xhr.send();
 	}, [
 		serverUrl,
-		authToken,
+		deviceId,
+		deviceSecret,
 		directory,
 		isConnected,
 		clearTimers,

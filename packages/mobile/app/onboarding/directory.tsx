@@ -25,6 +25,7 @@ import {
 	PushpinIcon,
 } from "../../src/components/icons";
 import { useConnectionStore } from "../../src/stores/useConnectionStore";
+import { buildShadowHeaders } from "../../src/lib/shadowAuth";
 import { FontSizes, Spacing, typography, useTheme } from "../../src/theme";
 
 function BackButton() {
@@ -154,7 +155,7 @@ function PinnedDirectoryRow({ path, homePath, onPress, onUnpin }: PinnedDirector
 export default function DirectoryScreen() {
 	const insets = useSafeAreaInsets();
 	const { colors } = useTheme();
-	const { setDirectory, serverUrl, directory: savedDirectory, authToken, pinnedDirectories, loadPinnedDirectories, togglePinnedDirectory } = useConnectionStore();
+	const { setDirectory, serverUrl, directory: savedDirectory, deviceId, deviceSecret, pinnedDirectories, loadPinnedDirectories, togglePinnedDirectory } = useConnectionStore();
 
 	const [currentPath, setCurrentPath] = useState<string>("/");
 	const [homePath, setHomePath] = useState<string | null>(null);
@@ -187,10 +188,22 @@ export default function DirectoryScreen() {
 		}
 	}, []);
 
+	const shadowAuthHeaders = useMemo(() => {
+		if (!deviceId || !deviceSecret) {
+			return {};
+		}
+		// Queued for the item-4 rewire: these legacy opencode endpoints do
+		// not exist on the Shadow Node; signing keeps the auth story
+		// consistent until then.
+		return {
+			...buildShadowHeaders(deviceId, deviceSecret, "GET", "/api/fs/cwd", ""),
+		};
+	}, [deviceId, deviceSecret]);
+
 	const loadServerCwd = useCallback(async () => {
 		try {
 			const response = await fetch(`${serverUrl}/api/fs/cwd`, {
-				headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+				headers: shadowAuthHeaders,
 			});
 			if (response.ok) {
 				const data = await response.json();
@@ -207,7 +220,7 @@ export default function DirectoryScreen() {
 		// Fallback: try to get just the home directory
 		try {
 			const response = await fetch(`${serverUrl}/api/fs/home`, {
-				headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+				headers: shadowAuthHeaders,
 			});
 			if (response.ok) {
 				const data = await response.json();
@@ -220,7 +233,7 @@ export default function DirectoryScreen() {
 			// Ignore
 		}
 		return null;
-	}, [serverUrl, authToken]);
+	}, [serverUrl, shadowAuthHeaders]);
 
 	useEffect(() => {
 		async function init() {

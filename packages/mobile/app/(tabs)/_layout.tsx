@@ -53,12 +53,10 @@ export default function TabsLayout() {
 		initializeSessionSync().catch(console.error);
 	}, []);
 
-	// Redirect to directory selection if connected but no directory set
-	useEffect(() => {
-		if (isConnected && !directory) {
-			router.replace("/onboarding/directory");
-		}
-	}, [isConnected, directory]);
+	// The Shadow Node has no working-directory concept; the old opencode
+	// "pick a directory after pairing" redirect would trap users on the
+	// directory screen, so it is gone. Directory UI rework is queued for
+	// the chat/files rewire (build-order item 4).
 
 	// Callbacks for chat screen to sync streaming state
 	// Use refs that get updated each render to avoid stale closures
