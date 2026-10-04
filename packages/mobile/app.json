@@ -1,44 +1,45 @@
 {
   "expo": {
-    "name": "OpenCode",
-    "slug": "opencode",
-    "version": "1.2.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "scheme": "opencode",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "platforms": [
-      "ios"
-    ],
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#100F0F"
+    "experiments": {
+      "typedRoutes": true
     },
+    "extra": {
+      "eas": {
+        "projectId": "0f1f6641-2847-4b02-9961-7d1354754b44"
+      },
+      "router": {
+        "origin": false
+      }
+    },
+    "icon": "./assets/icon.png",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "ceo.nerd.opencode",
       "buildNumber": "3",
+      "bundleIdentifier": "ai.shadow.app",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
-        "NSCameraUsageDescription": "OpenCode needs camera access to scan QR codes for server pairing",
-        "NSFaceIDUsageDescription": "OpenCode uses Face ID to secure your authentication tokens",
-        "NSLocalNetworkUsageDescription": "OpenCode discovers local servers on your network",
-        "NSBonjourServices": [
-          "_opencode._tcp",
-          "_http._tcp"
-        ],
         "LSSupportsOpeningDocumentsInPlace": true,
-        "UIFileSharingEnabled": true,
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
-        }
+        },
+        "NSBonjourServices": [
+          "_http._tcp"
+        ],
+        "NSFaceIDUsageDescription": "SHADOW uses Face ID to protect the app",
+        "NSLocalNetworkUsageDescription": "SHADOW connects to your Shadow Node on the local network",
+        "UIFileSharingEnabled": true
       },
-      "config": {
-        "usesNonExemptEncryption": false
-      }
+      "supportsTablet": true
     },
+    "name": "SHADOW",
+    "newArchEnabled": true,
+    "orientation": "portrait",
+    "owner": "heynerd",
+    "platforms": [
+      "ios"
+    ],
     "plugins": [
       "expo-router",
       [
@@ -66,36 +67,27 @@
       ],
       "expo-secure-store",
       [
-        "expo-camera",
-        {
-          "cameraPermission": "Allow OpenCode to access your camera to scan QR codes"
-        }
-      ],
-      [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Allow OpenCode to use Face ID for secure authentication"
+          "faceIDPermission": "Allow SHADOW to use Face ID to protect the app"
         }
       ],
       [
         "expo-file-system",
         {
-          "supportsOpeningDocumentsInPlace": true,
-          "enableFileSharing": true
+          "enableFileSharing": true,
+          "supportsOpeningDocumentsInPlace": true
         }
       ]
     ],
-    "experiments": {
-      "typedRoutes": true
+    "scheme": "shadow",
+    "slug": "shadow",
+    "splash": {
+      "backgroundColor": "#100F0F",
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain"
     },
-    "extra": {
-      "router": {
-        "origin": false
-      },
-      "eas": {
-        "projectId": "0f1f6641-2847-4b02-9961-7d1354754b44"
-      }
-    },
-    "owner": "heynerd"
+    "userInterfaceStyle": "automatic",
+    "version": "1.2.0"
   }
 }

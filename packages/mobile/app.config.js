@@ -2,25 +2,25 @@ const IS_DEV = process.env.APP_VARIANT === 'development';
 const IS_PREVIEW = process.env.APP_VARIANT === 'preview';
 
 const getAppName = () => {
-  if (IS_DEV) return 'OpenCode Dev';
-  if (IS_PREVIEW) return 'OpenCode Preview';
-  return 'OpenCode';
+  if (IS_DEV) return 'SHADOW Dev';
+  if (IS_PREVIEW) return 'SHADOW Preview';
+  return 'SHADOW';
 };
 
 const getBundleId = () => {
-  if (IS_DEV) return 'ceo.nerd.opencode.dev';
-  if (IS_PREVIEW) return 'ceo.nerd.opencode.preview';
-  return 'ceo.nerd.opencode';
+  if (IS_DEV) return 'ai.shadow.app.dev';
+  if (IS_PREVIEW) return 'ai.shadow.app.preview';
+  return 'ai.shadow.app';
 };
 
 export default {
   expo: {
     name: getAppName(),
-    slug: 'opencode',
+    slug: 'shadow',
     version: '1.0.0',
     orientation: 'portrait',
     icon: './assets/icon.png',
-    scheme: 'opencode',
+    scheme: 'shadow',
     userInterfaceStyle: 'automatic',
     newArchEnabled: true,
     platforms: ['ios'],
@@ -34,13 +34,11 @@ export default {
       bundleIdentifier: getBundleId(),
       buildNumber: '1',
       infoPlist: {
-        NSCameraUsageDescription:
-          'OpenCode needs camera access to scan QR codes for server pairing',
         NSFaceIDUsageDescription:
-          'OpenCode uses Face ID to secure your authentication tokens',
+          'SHADOW uses Face ID to protect the app',
         NSLocalNetworkUsageDescription:
-          'OpenCode discovers local servers on your network',
-        NSBonjourServices: ['_opencode._tcp', '_http._tcp'],
+          'SHADOW connects to your Shadow Node on the local network',
+        NSBonjourServices: ['_http._tcp'],
         LSSupportsOpeningDocumentsInPlace: true,
         UIFileSharingEnabled: true,
         NSAppTransportSecurity: {
@@ -75,17 +73,10 @@ export default {
       ],
       'expo-secure-store',
       [
-        'expo-camera',
-        {
-          cameraPermission:
-            'Allow OpenCode to access your camera to scan QR codes',
-        },
-      ],
-      [
         'expo-local-authentication',
         {
           faceIDPermission:
-            'Allow OpenCode to use Face ID for secure authentication',
+            'Allow SHADOW to use Face ID to protect the app',
         },
       ],
       [
