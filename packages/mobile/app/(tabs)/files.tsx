@@ -1,139 +1,303 @@
-import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
 	Pressable,
 	RefreshControl,
+	ScrollView,
 	StyleSheet,
 	Text,
 	View,
 } from "react-native";
 import { Button } from "@/components/ui";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { type FileListEntry, filesApi } from "../../src/api";
 import {
-	ArrowUpIcon,
-	ChevronRightIcon,
+	type Artifact,
+	type ArtifactMeta,
+	type ArtifactVersionInfo,
+	artifactsApi,
+} from "../../src/api";
+import { MarkdownRenderer } from "../../src/components/markdown/MarkdownRenderer";
+import {
+	ChevronLeftIcon,
 	FileIcon,
-	FolderIcon,
 } from "../../src/components/icons";
 import { useConnectionStore } from "../../src/stores/useConnectionStore";
-import { typography, useTheme } from "../../src/theme";
+import { fontStyle, typography, useTheme } from "../../src/theme";
 
-function getFileColor(
-	extension: string | undefined,
-	colors: { code: string; config: string; doc: string; default: string },
-): string {
-	const isCode = [
-		"ts",
-		"tsx",
-		"js",
-		"jsx",
-		"py",
-		"go",
-		"rs",
-		"rb",
-		"java",
-		"c",
-		"cpp",
-		"h",
-	].includes(extension || "");
-	const isConfig = ["json", "yaml", "yml", "toml", "xml", "env"].includes(
-		extension || "",
-	);
-	const isDoc = ["md", "txt", "doc", "pdf"].includes(extension || "");
+// ---------------------------------------------------------------------------
+// Artifacts tab: read-only browser for the node's durable documents.
+// Server contract: GET /artifacts -> {artifacts, total, limit, offset};
+// GET /artifacts/{id} -> full artifact JSON; GET /artifacts/{id}/versions
+// -> {artifact_id, versions}. Editing (PATCH + expected_version) is out of
+// scope for this pass.
+// ---------------------------------------------------------------------------
 
-	return isCode
-		? colors.code
-		: isConfig
-			? colors.config
-			: isDoc
-				? colors.doc
-				: colors.default;
+function formatBytes(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function FileItem({
+function formatDate(unixSeconds: number): string {
+	const d = new Date(unixSeconds * 1000);
+	return d.toLocaleDateString(undefined, {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+	});
+}
+
+function KindBadge({ kind }: { kind: string }) {
+	const { colors } = useTheme();
+	return (
+		<View
+			style={[styles.kindBadge, { backgroundColor: colors.muted }]}
+		>
+			<Text
+				style={[
+					typography.micro,
+					fontStyle("600"),
+					{ color: colors.mutedForeground },
+				]}
+			>
+				{kind}
+			</Text>
+		</View>
+	);
+}
+
+function ArtifactRow({
 	item,
 	onPress,
 }: {
-	item: FileListEntry;
+	item: ArtifactMeta;
 	onPress: () => void;
 }) {
 	const { colors } = useTheme();
-	const extension = item.name.split(".").pop()?.toLowerCase();
-
-	const fileColors = {
-		code: colors.info,
-		config: colors.primary,
-		doc: colors.success,
-		default: colors.mutedForeground,
-	};
-
 	return (
 		<Pressable
 			onPress={onPress}
+			accessibilityLabel={`Open artifact: ${item.title}`}
 			style={({ pressed }) => [
-				styles.fileItem,
+				styles.row,
 				{ borderBottomColor: colors.border },
 				pressed && { backgroundColor: colors.muted },
 			]}
 		>
-			{item.isDirectory ? (
-				<FolderIcon size={20} color={colors.primary} />
-			) : (
-				<FileIcon size={20} color={getFileColor(extension, fileColors)} />
-			)}
-			<Text
-				style={[typography.uiLabel, { color: colors.foreground, flex: 1 }]}
-				numberOfLines={1}
-			>
-				{item.name}
-			</Text>
-			{item.isDirectory && (
-				<ChevronRightIcon size={16} color={colors.mutedForeground} />
-			)}
+			<FileIcon size={20} color={colors.primary} />
+			<View style={styles.rowText}>
+				<Text
+					style={[typography.uiLabel, { color: colors.foreground }]}
+					numberOfLines={1}
+				>
+					{item.title}
+				</Text>
+				<Text
+					style={[typography.micro, { color: colors.mutedForeground }]}
+					numberOfLines={1}
+				>
+					v{item.version} · {formatDate(item.updated_at)} ·{" "}
+					{formatBytes(item.size_bytes)}
+				</Text>
+			</View>
+			<KindBadge kind={item.kind} />
 		</Pressable>
 	);
 }
 
-function PathBreadcrumb({
-	path,
-	rootPath,
-	onNavigate,
+function VersionRow({
+	info,
+	isCurrent,
+	onPress,
 }: {
-	path: string;
-	rootPath: string;
-	onNavigate: (path: string) => void;
+	info: ArtifactVersionInfo;
+	isCurrent: boolean;
+	onPress: () => void;
 }) {
 	const { colors } = useTheme();
-	const relativePath = path.startsWith(rootPath)
-		? path.slice(rootPath.length)
-		: path;
+	return (
+		<Pressable
+			onPress={onPress}
+			accessibilityLabel={`View version ${info.version}`}
+			style={({ pressed }) => [
+				styles.versionRow,
+				{ borderBottomColor: colors.border },
+				pressed && { backgroundColor: colors.muted },
+			]}
+		>
+			<Text
+				style={[
+					typography.uiLabel,
+					fontStyle("600"),
+					{ color: isCurrent ? colors.primary : colors.foreground },
+				]}
+			>
+				v{info.version}
+				{isCurrent ? " (current)" : ""}
+			</Text>
+			<Text style={[typography.micro, { color: colors.mutedForeground }]}>
+				{formatDate(info.created_at)} · {formatBytes(info.size_bytes)}
+			</Text>
+		</Pressable>
+	);
+}
 
-	const parts = relativePath.split("/").filter(Boolean);
+function ArtifactDetail({
+	artifactId,
+	onBack,
+}: {
+	artifactId: string;
+	onBack: () => void;
+}) {
+	const { colors } = useTheme();
+	const [artifact, setArtifact] = useState<Artifact | null>(null);
+	const [versions, setVersions] = useState<ArtifactVersionInfo[]>([]);
+	const [viewingVersion, setViewingVersion] = useState<number | null>(null);
+	const [isLoading, setIsLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
+
+	const load = useCallback(
+		async (version: number | null) => {
+			setIsLoading(true);
+			setError(null);
+			try {
+				const [doc, vers] = await Promise.all([
+					version === null
+						? artifactsApi.get(artifactId)
+						: artifactsApi.getVersion(artifactId, version),
+					artifactsApi.versions(artifactId),
+				]);
+				setArtifact(doc);
+				setVersions(
+					[...vers].sort((a, b) => b.version - a.version),
+				);
+				setViewingVersion(version);
+			} catch (err) {
+				setError(
+					err instanceof Error ? err.message : "Failed to load artifact",
+				);
+			} finally {
+				setIsLoading(false);
+			}
+		},
+		[artifactId],
+	);
+
+	useEffect(() => {
+		load(null);
+	}, [load]);
 
 	return (
-		<View style={[styles.breadcrumb, { borderBottomColor: colors.border }]}>
-			<Pressable onPress={() => onNavigate(rootPath)}>
-				<Text style={[typography.meta, { color: colors.primary }]}>~</Text>
-			</Pressable>
-			{parts.map((part, index) => {
-				const fullPath = rootPath + "/" + parts.slice(0, index + 1).join("/");
+		<View style={[styles.container, { backgroundColor: colors.background }]}>
+			<View style={[styles.detailHeader, { borderBottomColor: colors.border }]}>
+				<Pressable
+					onPress={onBack}
+					accessibilityLabel="Back to artifacts"
+					style={({ pressed }) => [
+						styles.backButton,
+						pressed && { opacity: 0.6 },
+					]}
+				>
+					<ChevronLeftIcon size={20} color={colors.primary} />
+					<Text
+						style={[
+							typography.uiLabel,
+							fontStyle("500"),
+							{ color: colors.primary },
+						]}
+					>
+						Artifacts
+					</Text>
+				</Pressable>
+			</View>
 
-				return (
-					<View key={fullPath} style={styles.breadcrumbPart}>
-						<Text style={[typography.meta, { color: colors.mutedForeground }]}>
-							/
-						</Text>
-						<Pressable onPress={() => onNavigate(fullPath)}>
-							<Text style={[typography.meta, { color: colors.primary }]}>
-								{part}
+			{isLoading ? (
+				<View style={styles.centered}>
+					<ActivityIndicator size="large" color={colors.primary} />
+				</View>
+			) : error ? (
+				<View style={styles.centered}>
+					<Text
+						style={[
+							typography.body,
+							{ color: colors.destructive, textAlign: "center" },
+						]}
+					>
+						{error}
+					</Text>
+					<Button
+						variant="muted"
+						size="md"
+						onPress={() => load(viewingVersion)}
+						style={{ marginTop: 16 }}
+					>
+						<Button.Label>Retry</Button.Label>
+					</Button>
+				</View>
+			) : (
+				artifact && (
+					<ScrollView style={styles.detailScroll}>
+						<View style={styles.detailTitleRow}>
+							<Text
+								style={[
+									typography.uiHeader,
+									{ color: colors.foreground, flex: 1 },
+								]}
+							>
+								{artifact.title}
 							</Text>
-						</Pressable>
-					</View>
-				);
-			})}
+							<KindBadge kind={artifact.kind} />
+						</View>
+						<Text
+							style={[
+								typography.micro,
+								{ color: colors.mutedForeground, marginBottom: 12 },
+							]}
+						>
+							v{artifact.version} · updated{" "}
+							{formatDate(artifact.updated_at)}
+							{viewingVersion !== null
+								? ` · viewing v${viewingVersion}`
+								: ""}
+						</Text>
+						{artifact.kind === "markdown" ? (
+							<MarkdownRenderer content={artifact.content} />
+						) : (
+							<Text
+								style={[
+									typography.code,
+									{ color: colors.foreground },
+								]}
+							>
+								{artifact.content}
+							</Text>
+						)}
+
+						<Text
+							style={[
+								typography.uiLabel,
+								fontStyle("600"),
+								{
+									color: colors.foreground,
+									marginTop: 24,
+									marginBottom: 4,
+								},
+							]}
+						>
+							Versions ({versions.length})
+						</Text>
+						{versions.map((v) => (
+							<VersionRow
+								key={v.version}
+								info={v}
+								isCurrent={v.version === artifact.version}
+								onPress={() => load(v.version)}
+							/>
+						))}
+					</ScrollView>
+				)
+			)}
 		</View>
 	);
 }
@@ -141,87 +305,50 @@ function PathBreadcrumb({
 export default function FilesScreen() {
 	const insets = useSafeAreaInsets();
 	const { colors } = useTheme();
-	const { isConnected, directory } = useConnectionStore();
+	const { isConnected } = useConnectionStore();
 
-	const [currentPath, setCurrentPath] = useState<string>(directory || "/");
-	const [entries, setEntries] = useState<FileListEntry[]>([]);
+	const [artifacts, setArtifacts] = useState<ArtifactMeta[]>([]);
+	const [total, setTotal] = useState(0);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isRefreshing, setIsRefreshing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [selectedId, setSelectedId] = useState<string | null>(null);
 
-	const loadDirectory = useCallback(
-		async (path: string) => {
-			if (!isConnected) {
-				setError("Not connected");
-				setIsLoading(false);
-				return;
-			}
-
-			try {
-				setError(null);
-				const result = await filesApi.listDirectory(path);
-
-				const sorted = result.entries.sort((a, b) => {
-					if (a.isDirectory && !b.isDirectory) return -1;
-					if (!a.isDirectory && b.isDirectory) return 1;
-					if (a.name.startsWith(".") && !b.name.startsWith(".")) return 1;
-					if (!a.name.startsWith(".") && b.name.startsWith(".")) return -1;
-					return a.name.localeCompare(b.name);
-				});
-
-				setEntries(sorted);
-				setCurrentPath(result.path);
-			} catch (err) {
-				setError(
-					err instanceof Error ? err.message : "Failed to load directory",
-				);
-			} finally {
-				setIsLoading(false);
-				setIsRefreshing(false);
-			}
-		},
-		[isConnected],
-	);
+	const load = useCallback(async () => {
+		if (!isConnected) {
+			setError("Not connected");
+			setIsLoading(false);
+			setIsRefreshing(false);
+			return;
+		}
+		try {
+			setError(null);
+			const result = await artifactsApi.list({ limit: 50 });
+			const sorted = [...result.artifacts].sort(
+				(a, b) => b.updated_at - a.updated_at,
+			);
+			setArtifacts(sorted);
+			setTotal(result.total);
+		} catch (err) {
+			setError(
+				err instanceof Error ? err.message : "Failed to load artifacts",
+			);
+		} finally {
+			setIsLoading(false);
+			setIsRefreshing(false);
+		}
+	}, [isConnected]);
 
 	useEffect(() => {
-		if (directory) {
-			loadDirectory(directory);
-		}
-	}, [directory, loadDirectory]);
-
-	const handleNavigate = useCallback(
-		(path: string) => {
-			setIsLoading(true);
-			loadDirectory(path);
-		},
-		[loadDirectory],
-	);
+		load();
+	}, [load]);
 
 	const handleRefresh = useCallback(() => {
 		setIsRefreshing(true);
-		loadDirectory(currentPath);
-	}, [currentPath, loadDirectory]);
+		load();
+	}, [load]);
 
-	const handleGoUp = useCallback(() => {
-		if (!directory || currentPath === directory) return;
-		const parentPath = currentPath.split("/").slice(0, -1).join("/") || "/";
-		handleNavigate(parentPath);
-	}, [currentPath, directory, handleNavigate]);
-
-	const handleItemPress = useCallback(
-		(item: FileListEntry) => {
-			if (item.isDirectory) {
-				handleNavigate(item.path);
-			}
-		},
-		[handleNavigate],
-	);
-
-	const canGoUp = directory && currentPath !== directory;
-
-	const directoryName = directory?.split("/").pop() || "Select Directory";
-
-	if (!directory) {
+	if (selectedId) {
 		return (
 			<View
 				style={[
@@ -229,37 +356,13 @@ export default function FilesScreen() {
 					{ backgroundColor: colors.background, paddingTop: insets.top },
 				]}
 			>
-				<View style={styles.emptyStateContainer}>
-					<FolderIcon size={48} color={colors.primary} />
-					<Text
-						style={[
-							typography.uiHeader,
-							{ color: colors.foreground, marginTop: 16 },
-						]}
-					>
-						No Directory Selected
-					</Text>
-					<Text
-						style={[
-							typography.body,
-							{
-								color: colors.mutedForeground,
-								textAlign: "center",
-								marginTop: 8,
-							},
-						]}
-					>
-						Select a project directory to browse files
-					</Text>
-				<Button
-					variant="primary"
-					size="lg"
-					onPress={() => router.push("/onboarding/directory")}
-					style={{ marginTop: 24 }}
-				>
-					<Button.Label>Select Directory</Button.Label>
-				</Button>
-				</View>
+				<ArtifactDetail
+					artifactId={selectedId}
+					onBack={() => {
+						setSelectedId(null);
+						load();
+					}}
+				/>
 			</View>
 		);
 	}
@@ -272,38 +375,22 @@ export default function FilesScreen() {
 			]}
 		>
 			<View style={[styles.header, { borderBottomColor: colors.border }]}>
-				<Pressable
-					onPress={() => router.push("/onboarding/directory")}
-					style={[styles.directoryButton, { backgroundColor: colors.muted }]}
-				>
-					<FolderIcon color={colors.primary} />
-					<Text
-						style={[typography.meta, { color: colors.foreground, flex: 1 }]}
-						numberOfLines={1}
-					>
-						{directoryName}
-					</Text>
-					<Text style={[typography.micro, { color: colors.mutedForeground }]}>
-						Change
-					</Text>
-				</Pressable>
 				<Text style={[typography.uiHeader, { color: colors.foreground }]}>
-					Files
+					Artifacts
 				</Text>
+				{total > 0 && (
+					<Text style={[typography.micro, { color: colors.mutedForeground }]}>
+						{total} total
+					</Text>
+				)}
 			</View>
 
-			<PathBreadcrumb
-				path={currentPath}
-				rootPath={directory}
-				onNavigate={handleNavigate}
-			/>
-
 			{isLoading && !isRefreshing ? (
-				<View style={styles.loadingContainer}>
+				<View style={styles.centered}>
 					<ActivityIndicator size="large" color={colors.primary} />
 				</View>
 			) : error ? (
-				<View style={styles.errorContainer}>
+				<View style={styles.centered}>
 					<Text
 						style={[
 							typography.body,
@@ -315,7 +402,7 @@ export default function FilesScreen() {
 					<Button
 						variant="muted"
 						size="md"
-						onPress={() => loadDirectory(currentPath)}
+						onPress={load}
 						style={{ marginTop: 16 }}
 					>
 						<Button.Label>Retry</Button.Label>
@@ -323,50 +410,23 @@ export default function FilesScreen() {
 				</View>
 			) : (
 				<FlatList
-					data={entries}
-					keyExtractor={(item) => item.path}
+					data={artifacts}
+					keyExtractor={(item) => item.id}
 					refreshControl={
 						<RefreshControl
 							refreshing={isRefreshing}
 							onRefresh={handleRefresh}
 						/>
 					}
-					initialNumToRender={24}
-					maxToRenderPerBatch={24}
-					updateCellsBatchingPeriod={50}
-					windowSize={7}
-					removeClippedSubviews={true}
-					ListHeaderComponent={
-						canGoUp ? (
-							<Pressable
-								onPress={handleGoUp}
-								style={({ pressed }) => [
-									styles.fileItem,
-									{ borderBottomColor: colors.border },
-									pressed && { backgroundColor: colors.muted },
-								]}
-							>
-								<ArrowUpIcon size={20} color={colors.mutedForeground} />
-								<Text
-									style={[
-										typography.uiLabel,
-										{ color: colors.mutedForeground },
-									]}
-								>
-									..
-								</Text>
-							</Pressable>
-						) : null
-					}
 					renderItem={({ item }) => (
-						<FileItem item={item} onPress={() => handleItemPress(item)} />
+						<ArtifactRow item={item} onPress={() => setSelectedId(item.id)} />
 					)}
 					ListEmptyComponent={
 						<View style={styles.emptyList}>
 							<Text
 								style={[typography.body, { color: colors.mutedForeground }]}
 							>
-								Empty directory
+								No artifacts yet
 							</Text>
 						</View>
 					}
@@ -383,49 +443,33 @@ const styles = StyleSheet.create({
 	header: {
 		borderBottomWidth: 1,
 		paddingHorizontal: 16,
-		paddingVertical: 8,
-	},
-	directoryButton: {
+		paddingVertical: 12,
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 8,
-		borderRadius: 8,
-		paddingHorizontal: 12,
-		paddingVertical: 8,
-		marginBottom: 8,
+		justifyContent: "space-between",
 	},
-	breadcrumb: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		alignItems: "center",
-		gap: 4,
+	detailHeader: {
 		borderBottomWidth: 1,
-		paddingHorizontal: 16,
+		paddingHorizontal: 8,
 		paddingVertical: 8,
 	},
-	breadcrumbPart: {
+	backButton: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 4,
+		gap: 2,
+		paddingVertical: 4,
 	},
-	loadingContainer: {
-		flex: 1,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	errorContainer: {
+	centered: {
 		flex: 1,
 		alignItems: "center",
 		justifyContent: "center",
 		paddingHorizontal: 32,
 	},
-	retryButton: {
-		marginTop: 16,
-		borderRadius: 8,
-		paddingHorizontal: 16,
-		paddingVertical: 8,
+	emptyList: {
+		alignItems: "center",
+		paddingVertical: 32,
 	},
-	fileItem: {
+	row: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 12,
@@ -433,20 +477,30 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 16,
 		paddingVertical: 12,
 	},
-	emptyList: {
-		alignItems: "center",
-		paddingVertical: 32,
-	},
-	emptyStateContainer: {
+	rowText: {
 		flex: 1,
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: 32,
+		gap: 2,
 	},
-	selectButton: {
-		marginTop: 24,
-		borderRadius: 8,
-		paddingHorizontal: 24,
-		paddingVertical: 12,
+	kindBadge: {
+		borderRadius: 6,
+		paddingHorizontal: 8,
+		paddingVertical: 3,
+	},
+	detailScroll: {
+		flex: 1,
+		paddingHorizontal: 16,
+		paddingTop: 12,
+		paddingBottom: 32,
+	},
+	detailTitleRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+		marginBottom: 4,
+	},
+	versionRow: {
+		borderBottomWidth: 1,
+		paddingVertical: 10,
+		gap: 2,
 	},
 });

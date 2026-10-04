@@ -2,7 +2,7 @@ import type BottomSheet from "@gorhom/bottom-sheet";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { gitApi, type Session, sessionsApi } from "../../src/api";
+import { type Session, sessionsApi } from "../../src/api";
 import type { ContextUsage } from "../../src/components/chat";
 import { Header } from "../../src/components/layout/Header";
 import { SessionSheet } from "../../src/components/session";
@@ -24,11 +24,9 @@ import { useTheme } from "../../src/theme";
 import { SetupGate } from "../../src/components/layout/SetupGate";
 import ApprovalsScreen from "./approvals";
 import ChatScreen from "./chat";
-import DiffScreen from "./diff";
-import GitScreen from "./git";
-import TerminalScreen from "./terminal";
+import FilesScreen from "./files";
 
-type MainTab = "approvals" | "chat" | "diff" | "terminal" | "git";
+type MainTab = "approvals" | "chat" | "artifacts";
 
 export default function TabsLayout() {
 	const { colors } = useTheme();
@@ -36,14 +34,16 @@ export default function TabsLayout() {
 	// The approvals inbox is the killer screen: it is the default tab.
 	const [activeTab, setActiveTab] = useState<MainTab>("approvals");
 	const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
-	const [diffFileCount, setDiffFileCount] = useState(0);
 	const approvalCount = useApprovalsStore((s) => s.items.length);
 
 	// Session management state (shared across all tabs)
 	const [sessions, setSessions] = useState<Session[]>([]);
 	const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 	const [isLoadingSessions, setIsLoadingSessions] = useState(false);
-	const [isGitRepo, setIsGitRepo] = useState(false);
+	// The node has no git surface (no /api/git/* routes), so this stays
+	// false: the dead git-status poll that fed it was removed with the
+	// git/diff tabs. SessionSheet keeps the prop for a future node surface.
+	const [isGitRepo] = useState(false);
 	const [streamingSessionIds, setStreamingSessionIds] = useState<Set<string>>(
 		new Set(),
 	);
@@ -72,30 +72,8 @@ export default function TabsLayout() {
 	const setCurrentSessionIdRef = useRef<(id: string | null) => void>(() => {});
 	setCurrentSessionIdRef.current = (id) => setCurrentSessionId(id);
 
-	// Fetch git status to show file count indicator on git tab
-	useEffect(() => {
-		if (!isConnected || !directory) {
-			setDiffFileCount(0);
-			setIsGitRepo(false);
-			return;
-		}
-
-		const fetchGitStatus = async () => {
-			try {
-				const status = await gitApi.getStatus();
-				setDiffFileCount(status?.files?.length ?? 0);
-				setIsGitRepo(Boolean(status?.current));
-			} catch {
-				setDiffFileCount(0);
-				setIsGitRepo(false);
-			}
-		};
-
-		fetchGitStatus();
-		// Poll for changes every 10 seconds
-		const interval = setInterval(fetchGitStatus, 10000);
-		return () => clearInterval(interval);
-	}, [isConnected, directory]);
+	// The git and diff tabs were removed (the node has no /api/git/*
+	// routes), so the git-status poll that fed the diff badge is gone too.
 
 	const fetchSessions = useCallback(async () => {
 		setIsLoadingSessions(true);
@@ -289,12 +267,8 @@ export default function TabsLayout() {
 				return <ApprovalsScreen />;
 			case "chat":
 				return <ChatScreen />;
-			case "git":
-				return <GitScreen />;
-			case "diff":
-				return <DiffScreen />;
-			case "terminal":
-				return <TerminalScreen />;
+			case "artifacts":
+				return <FilesScreen />;
 			default:
 				return <ApprovalsScreen />;
 		}
@@ -313,7 +287,6 @@ export default function TabsLayout() {
 						onSettingsPress={handleSettingsPress}
 						onSessionsPress={openSessionSheet}
 						contextUsage={contextUsage}
-						diffFileCount={diffFileCount}
 						approvalCount={approvalCount}
 					/>
 					{/* Setup gate (OpenDots backlog #9): block tab content until
