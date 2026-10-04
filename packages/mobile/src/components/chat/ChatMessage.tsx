@@ -8,7 +8,64 @@ import { useMessageActions } from "./useMessageActions";
 import { ReasoningPart, ToolPart } from "./parts";
 import { CopyIcon, UndoIcon, GitBranchIcon, CheckIcon } from "../icons";
 import { ProviderLogo } from "../ui/ProviderLogo";
-import { type Message, type MessagePart, inferProviderIdFromModelName } from "./types";
+import { type Message, type MessagePart, type AgentSource, inferProviderIdFromModelName } from "./types";
+
+/**
+ * Retrieval citations from the node's ask pipeline (agent.message.done).
+ * The chat UI has no inline-citation affordance, so sources render as a
+ * small tappable list under the message; tapping a row toggles the
+ * retrieval explanation.
+ */
+function SourcesList({ sources }: { sources: AgentSource[] }) {
+	const { colors } = useTheme();
+	const [expanded, setExpanded] = useState<number | null>(null);
+
+	return (
+		<View style={{ paddingLeft: Spacing[3], marginTop: Spacing[1] }}>
+			<Text
+				style={[
+					typography.micro,
+					fontStyle("600"),
+					{ color: colors.mutedForeground, marginBottom: 2 },
+				]}
+			>
+				Sources ({sources.length})
+			</Text>
+			{sources.map((source, index) => {
+				const label = source.attribution || `Source ${index + 1}`;
+				const isOpen = expanded === index;
+				return (
+					<Pressable
+						key={`${index}-${label}`}
+						onPress={() => setExpanded(isOpen ? null : index)}
+						accessibilityLabel={`Source: ${label}`}
+						style={{ paddingVertical: 2 }}
+					>
+						<Text
+							style={[
+								typography.micro,
+								{ color: colors.primary },
+							]}
+							numberOfLines={isOpen ? undefined : 1}
+						>
+							{index + 1}. {label}
+						</Text>
+						{isOpen && source.explanation ? (
+							<Text
+								style={[
+									typography.micro,
+									{ color: colors.mutedForeground, marginTop: 2 },
+								]}
+							>
+								{source.explanation}
+							</Text>
+						) : null}
+					</Pressable>
+				);
+			})}
+		</View>
+	);
+}
 
 function FadeInView({
 	children,
@@ -462,6 +519,18 @@ function AssistantMessage({
 					>
 						{modelName || "Assistant"}
 					</Text>
+					{message.route ? (
+						<Text
+							style={[
+								typography.micro,
+								fontStyle("400"),
+								{ color: colors.mutedForeground },
+							]}
+							numberOfLines={1}
+						>
+							{" "}· {message.route}
+						</Text>
+					) : null}
 
 
 					{agentName && (() => {
@@ -511,6 +580,9 @@ function AssistantMessage({
 					</Pressable>
 				)}
 			</View>
+			{message.sources && message.sources.length > 0 && !isStreaming && (
+				<SourcesList sources={message.sources} />
+			)}
 			{/* Inline action icons for assistant messages */}
 			{showActionIcons && (
 				<View className="flex-row items-center gap-1 mt-1 pl-3">

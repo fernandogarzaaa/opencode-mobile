@@ -65,6 +65,25 @@ export type Message = {
 	agentName?: string;
 	// Token usage info
 	tokens?: number | TokenBreakdown;
+	// Shadow Node ask metadata, from the agent.message.done event
+	// (POST /agent/ask_stream; see src/api/agent.ts).
+	sources?: AgentSource[];
+	modelUsed?: string;
+	route?: string;
+};
+
+/**
+ * A retrieval citation from the node's ask pipeline.
+ * Server shape: SearchResult in packages/memory-engine/memory_engine/models.py
+ * (attribution is the human-readable label, e.g. "Title (kind)").
+ */
+export type AgentSource = {
+	attribution?: string;
+	explanation?: string;
+	score?: number;
+	freshness?: number;
+	untrusted_context?: boolean;
+	[key: string]: unknown;
 };
 
 /**

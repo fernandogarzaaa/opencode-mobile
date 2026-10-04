@@ -81,6 +81,19 @@ interface ChatInputProps {
 	onAgentPress?: () => void;
 	/** Whether a session is currently active (for placeholder text) */
 	hasActiveSession?: boolean;
+	/**
+	 * Hide the file-attachment button. The Shadow Node's ask endpoint takes
+	 * text only, so there is nowhere to send attachments.
+	 */
+	hideAttachments?: boolean;
+	/**
+	 * Hide the model/agent selector row. The node routes asks itself
+	 * (agent.message.done carries model_used/route); there is no
+	 * provider/model picker surface on the node.
+	 */
+	hideModelSelector?: boolean;
+	/** Called when the send button is pressed while a request is streaming. */
+	onStop?: () => void;
 }
 
 function AgentIcon() {
@@ -411,6 +424,9 @@ export function ChatInput({
 	onModelPress,
 	onAgentPress,
 	hasActiveSession = true,
+	hideAttachments = false,
+	hideModelSelector = false,
+	onStop,
 }: ChatInputProps) {
 	// Use custom placeholder if provided, otherwise use conditional defaults
 	const inputPlaceholder =
@@ -617,6 +633,14 @@ export function ChatInput({
 		Keyboard.dismiss();
 	}, [text, attachedFiles, isLoading, onSend]);
 
+	const handleSendPress = useCallback(async () => {
+		if (isLoading) {
+			onStop?.();
+			return;
+		}
+		await handleSend();
+	}, [isLoading, onStop, handleSend]);
+
 	const closeAutocomplete = useCallback(() => {
 		setAutocompleteType(null);
 		setAutocompleteQuery("");
@@ -682,20 +706,23 @@ export function ChatInput({
 				/>
 
 				<View className={chatInputStyles.toolbar({})}>
-					<View className={chatInputStyles.toolbarLeftSection({})}>
-						<View className={chatInputStyles.toolbarButton({})}>
-							<FileAttachmentButton
-								onFileAttached={handleFileAttached}
-								disabled={isLoading}
-							/>
+					{!hideAttachments && (
+						<View className={chatInputStyles.toolbarLeftSection({})}>
+							<View className={chatInputStyles.toolbarButton({})}>
+								<FileAttachmentButton
+									onFileAttached={handleFileAttached}
+									disabled={isLoading}
+								/>
+							</View>
 						</View>
-					</View>
+					)}
 
 					{/* Right section: Model + Agent + Send (flex-1) */}
 					<View className={chatInputStyles.toolbarRightSection({})}>
 						{/* Model selector (flex-1 with overflow hidden) */}
-						<View className={chatInputStyles.modelInfoContainer({})}
-						>
+						{!hideModelSelector && (
+							<View className={chatInputStyles.modelInfoContainer({})}
+							>
 							<Pressable
 								onPress={handleModelPress}
 								className={chatInputStyles.modelSelector({})}
@@ -733,6 +760,7 @@ export function ChatInput({
 								)}
 							</Pressable>
 						</View>
+						)}
 
 						{/* Agent badge (if active) - flex-shrink-0 */}
 						{activeAgent && (
@@ -764,7 +792,7 @@ export function ChatInput({
 							}
 							variant="ghost"
 							size="icon-md"
-							onPress={handleSend}
+							onPress={handleSendPress}
 							isDisabled={!canSend && !isLoading}
 							accessibilityLabel={isLoading ? "Stop" : "Send message"}
 						/>
