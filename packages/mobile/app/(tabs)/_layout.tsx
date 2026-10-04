@@ -18,6 +18,7 @@ import {
 	getSessionCacheInfo,
 	initializeSessionSync,
 } from "../../src/lib/sessionSync";
+import { onApprovalNotificationTap } from "../../src/lib/approvalNotifications";
 import { useConnectionStore } from "../../src/stores/useConnectionStore";
 import { useApprovalsStore } from "../../src/stores/useApprovalsStore";
 import { useTheme } from "../../src/theme";
@@ -55,6 +56,17 @@ export default function TabsLayout() {
 
 	useEffect(() => {
 		initializeSessionSync().catch(console.error);
+	}, []);
+
+	// Push taps (Phase 4): a tap on an approval.created notification switches
+	// to the approvals inbox. The tabs are a custom in-layout switcher rather
+	// than expo-router tabs, so the deep link pushed by the notification
+	// handler alone cannot change the visible tab; this subscription performs
+	// the actual switch.
+	useEffect(() => {
+		return onApprovalNotificationTap(() => {
+			setActiveTab("approvals");
+		});
 	}, []);
 
 	// The Shadow Node has no working-directory concept; the old opencode
