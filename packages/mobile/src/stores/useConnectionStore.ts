@@ -1,16 +1,29 @@
 import * as SecureStore from "expo-secure-store";
 import { create } from "zustand";
+import { bytesToHex } from "../lib/shadowAuth";
 
 const STORAGE_KEYS = {
-	SERVER_URL: "openchamber_server_url",
-	AUTH_TOKEN: "openchamber_auth_token",
-	DIRECTORY: "openchamber_directory",
-	PINNED_DIRECTORIES: "openchamber_pinned_directories",
+	SERVER_URL: "shadow_server_url",
+	DEVICE_ID: "shadow_device_id",
+	DEVICE_SECRET: "shadow_device_secret",
+	// Stable random device identifier submitted as `public_key` at
+	// /pair/start. The node only uses it for the device fingerprint and
+	// display; the HMAC-derived secret is the actual credential.
+	DEVICE_KEY: "shadow_device_key",
+	DIRECTORY: "shadow_directory",
+	PINNED_DIRECTORIES: "shadow_pinned_directories",
+	// Legacy opencode credentials from before the Shadow rewire. They can
+	// never authenticate to the node, so they are deleted on initialize.
+	LEGACY_SERVER_URL: "openchamber_server_url",
+	LEGACY_AUTH_TOKEN: "openchamber_auth_token",
+	LEGACY_DIRECTORY: "openchamber_directory",
+	LEGACY_PINNED_DIRECTORIES: "openchamber_pinned_directories",
 } as const;
 
 interface ConnectionState {
 	serverUrl: string | null;
-	authToken: string | null;
+	deviceId: string | null;
+	deviceSecret: string | null;
 	directory: string | null;
 	homeDirectory: string | null;
 	pinnedDirectories: string[];
@@ -20,9 +33,14 @@ interface ConnectionState {
 
 interface ConnectionActions {
 	initialize: () => Promise<void>;
-	setConnection: (serverUrl: string, authToken: string) => Promise<void>;
+	setConnection: (
+		serverUrl: string,
+		deviceId: string,
+		deviceSecret: string,
+	) => Promise<void>;
+	/** Stable per-device identifier for the pairing ceremony. */
+	getOrCreateDeviceKey: () => Promise<string>;
 	setDirectory: (directory: string) => Promise<void>;
-	syncServerDirectory: () => Promise<void>;
 	loadPinnedDirectories: () => Promise<void>;
 	togglePinnedDirectory: (path: string) => Promise<void>;
 	disconnect: () => Promise<void>;
@@ -32,7 +50,8 @@ type ConnectionStore = ConnectionState & ConnectionActions;
 
 export const useConnectionStore = create<ConnectionStore>((set, get) => ({
 	serverUrl: null,
-	authToken: null,
+	deviceId: null,
+	deviceSecret: null,
 	directory: null,
 	homeDirectory: null,
 	pinnedDirectories: [],
@@ -41,12 +60,23 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
 
 	initialize: async () => {
 		try {
-			const [serverUrl, authToken, directory, pinnedDirectoriesRaw] = await Promise.all([
-				SecureStore.getItemAsync(STORAGE_KEYS.SERVER_URL),
-				SecureStore.getItemAsync(STORAGE_KEYS.AUTH_TOKEN),
-				SecureStore.getItemAsync(STORAGE_KEYS.DIRECTORY),
-				SecureStore.getItemAsync(STORAGE_KEYS.PINNED_DIRECTORIES),
-			]);
+			// Drop credentials minted for the old opencode server; they are
+			// useless against the Shadow Node's HMAC auth.
+			await Promise.all([
+				SecureStore.deleteItemAsync(STORAGE_KEYS.LEGACY_SERVER_URL),
+				SecureStore.deleteItemAsync(STORAGE_KEYS.LEGACY_AUTH_TOKEN),
+				SecureStore.deleteItemAsync(STORAGE_KEYS.LEGACY_DIRECTORY),
+				SecureStore.deleteItemAsync(STORAGE_KEYS.LEGACY_PINNED_DIRECTORIES),
+			]).catch(() => undefined);
+
+			const [serverUrl, deviceId, deviceSecret, directory, pinnedDirectoriesRaw] =
+				await Promise.all([
+					SecureStore.getItemAsync(STORAGE_KEYS.SERVER_URL),
+					SecureStore.getItemAsync(STORAGE_KEYS.DEVICE_ID),
+					SecureStore.getItemAsync(STORAGE_KEYS.DEVICE_SECRET),
+					SecureStore.getItemAsync(STORAGE_KEYS.DIRECTORY),
+					SecureStore.getItemAsync(STORAGE_KEYS.PINNED_DIRECTORIES),
+				]);
 
 			let pinnedDirectories: string[] = [];
 			if (pinnedDirectoriesRaw) {
@@ -59,10 +89,11 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
 
 			set({
 				serverUrl,
-				authToken,
+				deviceId,
+				deviceSecret,
 				directory,
 				pinnedDirectories,
-				isConnected: Boolean(serverUrl && authToken),
+				isConnected: Boolean(serverUrl && deviceId && deviceSecret),
 				isInitialized: true,
 			});
 		} catch {
@@ -70,23 +101,31 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
 		}
 	},
 
-	setConnection: async (serverUrl: string, authToken: string) => {
+	setConnection: async (serverUrl, deviceId, deviceSecret) => {
 		await Promise.all([
 			SecureStore.setItemAsync(STORAGE_KEYS.SERVER_URL, serverUrl),
-			SecureStore.setItemAsync(STORAGE_KEYS.AUTH_TOKEN, authToken),
+			SecureStore.setItemAsync(STORAGE_KEYS.DEVICE_ID, deviceId),
+			SecureStore.setItemAsync(STORAGE_KEYS.DEVICE_SECRET, deviceSecret),
 		]);
 
-		set({
-			serverUrl,
-			authToken,
-			isConnected: true,
-		});
+		set({ serverUrl, deviceId, deviceSecret, isConnected: true });
+	},
 
-		// After connecting, sync the server's working directory
-		const state = get();
-		if (!state.directory) {
-			await state.syncServerDirectory();
+	getOrCreateDeviceKey: async () => {
+		const existing = await SecureStore.getItemAsync(STORAGE_KEYS.DEVICE_KEY);
+		if (existing) {
+			return existing;
 		}
+		// 32 random bytes, hex-encoded. Not a real public key: a stable
+		// random identifier the node fingerprints for display.
+		const fresh = bytesToHex(
+			Uint8Array.from(
+				{ length: 32 },
+				() => Math.floor(Math.random() * 256),
+			),
+		);
+		await SecureStore.setItemAsync(STORAGE_KEYS.DEVICE_KEY, fresh);
+		return fresh;
 	},
 
 	setDirectory: async (directory: string) => {
@@ -95,117 +134,48 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => ({
 	},
 
 	/**
-	 * Sync the directory from the server's current working directory.
-	 * This is called when no local directory is set to initialize with
-	 * the directory where the server is running.
+	 * Pinned directories are local-only for now: the Shadow Node has no
+	 * config-settings endpoint (the old opencode sync is gone). The files
+	 * rewire (build-order item 4) will decide what pinning means there.
 	 */
-	syncServerDirectory: async () => {
-		const { serverUrl, authToken } = get();
-		if (!serverUrl || !authToken) return;
-
-		try {
-			const response = await fetch(`${serverUrl}/api/fs/cwd`, {
-				headers: {
-					Authorization: `Bearer ${authToken}`,
-				},
-			});
-
-			if (response.ok) {
-				const data = await response.json();
-				if (data.cwd) {
-					await SecureStore.setItemAsync(STORAGE_KEYS.DIRECTORY, data.cwd);
-					set({
-						directory: data.cwd,
-						homeDirectory: data.home || null,
-					});
-				}
-			}
-		} catch (error) {
-			console.warn("Failed to sync server directory:", error);
-		}
-	},
-
 	loadPinnedDirectories: async () => {
-		const { serverUrl, authToken } = get();
-		if (!serverUrl || !authToken) return;
-
-		try {
-			// Try to fetch from server
-			const response = await fetch(`${serverUrl}/api/config/settings`, {
-				headers: {
-					Authorization: `Bearer ${authToken}`,
-					Accept: "application/json",
-				},
-			});
-
-			if (response.ok) {
-				const data = await response.json();
-				const pinnedDirectories = Array.isArray(data?.pinnedDirectories)
-					? data.pinnedDirectories
-					: [];
-
-				// Cache locally
-				await SecureStore.setItemAsync(
-					STORAGE_KEYS.PINNED_DIRECTORIES,
-					JSON.stringify(pinnedDirectories)
-				);
-
-				set({ pinnedDirectories });
+		const raw = await SecureStore.getItemAsync(STORAGE_KEYS.PINNED_DIRECTORIES);
+		if (raw) {
+			try {
+				set({ pinnedDirectories: JSON.parse(raw) });
+			} catch {
+				// Keep the in-memory value.
 			}
-		} catch (error) {
-			console.warn("Failed to load pinned directories:", error);
-			// Fall back to cached data (already loaded in initialize)
 		}
 	},
 
 	togglePinnedDirectory: async (path: string) => {
-		const { serverUrl, authToken, pinnedDirectories } = get();
-		if (!serverUrl || !authToken) return;
-
-		// Toggle the path in the array
+		const { pinnedDirectories } = get();
 		const isPinned = pinnedDirectories.includes(path);
-		const newPinnedDirectories = isPinned
+		const next = isPinned
 			? pinnedDirectories.filter((p) => p !== path)
 			: [...pinnedDirectories, path];
-
-		// Optimistically update local state
-		set({ pinnedDirectories: newPinnedDirectories });
-
-		// Cache locally
+		set({ pinnedDirectories: next });
 		await SecureStore.setItemAsync(
 			STORAGE_KEYS.PINNED_DIRECTORIES,
-			JSON.stringify(newPinnedDirectories)
+			JSON.stringify(next),
 		);
-
-		// Sync to server
-		try {
-			await fetch(`${serverUrl}/api/config/settings`, {
-				method: "PUT",
-				headers: {
-					Authorization: `Bearer ${authToken}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					pinnedDirectories: newPinnedDirectories,
-				}),
-			});
-		} catch (error) {
-			console.warn("Failed to sync pinned directories to server:", error);
-			// Keep local state even if server sync fails
-		}
 	},
 
 	disconnect: async () => {
 		await Promise.all([
 			SecureStore.deleteItemAsync(STORAGE_KEYS.SERVER_URL),
-			SecureStore.deleteItemAsync(STORAGE_KEYS.AUTH_TOKEN),
+			SecureStore.deleteItemAsync(STORAGE_KEYS.DEVICE_ID),
+			SecureStore.deleteItemAsync(STORAGE_KEYS.DEVICE_SECRET),
+			SecureStore.deleteItemAsync(STORAGE_KEYS.DEVICE_KEY),
 			SecureStore.deleteItemAsync(STORAGE_KEYS.DIRECTORY),
 			SecureStore.deleteItemAsync(STORAGE_KEYS.PINNED_DIRECTORIES),
 		]);
 
 		set({
 			serverUrl: null,
-			authToken: null,
+			deviceId: null,
+			deviceSecret: null,
 			directory: null,
 			homeDirectory: null,
 			pinnedDirectories: [],

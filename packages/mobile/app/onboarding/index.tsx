@@ -2,7 +2,6 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/ui";
-import { QrCodeIcon } from "@/components/icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Path } from "react-native-svg";
 import { typography, useTheme } from "../../src/theme";
@@ -67,7 +66,7 @@ export default function OnboardingIndex() {
 					<Text
 						style={[typography.h1, { color: colors.foreground, marginTop: 24 }]}
 					>
-						OpenChamber
+						Shadow Node
 					</Text>
 					<Text
 						style={[
@@ -76,7 +75,7 @@ export default function OnboardingIndex() {
 							{ color: colors.mutedForeground },
 						]}
 					>
-						Connect to your OpenCode server to start coding with AI assistance
+						Pair this device with your Shadow Node to start working with your personal agent
 					</Text>
 				</View>
 
@@ -110,24 +109,11 @@ export default function OnboardingIndex() {
 						size="lg"
 						onPress={() => {
 							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-							router.push("/onboarding/scan");
-						}}
-						style={{ width: "100%", flexDirection: "row", gap: 8 }}
-					>
-						<QrCodeIcon size={18} color={colors.primaryForeground} />
-						<Button.Label>Scan QR Code</Button.Label>
-					</Button>
-
-					<Button
-						variant="outline"
-						size="lg"
-						onPress={() => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 							router.push("/onboarding/manual");
 						}}
 						style={{ width: "100%" }}
 					>
-						<Button.Label>Enter URL manually</Button.Label>
+						<Button.Label>Pair with Node</Button.Label>
 					</Button>
 				</View>
 
@@ -139,7 +125,7 @@ export default function OnboardingIndex() {
 						{ color: colors.mutedForeground },
 					]}
 				>
-					Make sure OpenCode is running on your computer
+					Make sure your Shadow Node is running and reachable from this device
 				</Text>
 			</ScrollView>
 		</View>

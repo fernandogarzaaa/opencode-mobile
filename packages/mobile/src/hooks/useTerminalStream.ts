@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import type { TerminalStreamEvent } from "../api/terminal";
+import { buildShadowHeaders } from "../lib/shadowAuth";
 import { useConnectionStore } from "../stores/useConnectionStore";
 
 const INITIAL_RECONNECT_DELAY_MS = 1000;
@@ -23,7 +24,8 @@ export function useTerminalStream(options: UseTerminalStreamOptions) {
 
 	const {
 		serverUrl,
-		authToken,
+		deviceId,
+		deviceSecret,
 		isConnected: isServerConnected,
 	} = useConnectionStore();
 
@@ -149,7 +151,7 @@ export function useTerminalStream(options: UseTerminalStreamOptions) {
 	const connect = useCallback(() => {
 		const currentSessionId = sessionIdRef.current;
 
-		if (!serverUrl || !authToken || !isServerConnected || !currentSessionId) {
+		if (!serverUrl || !deviceId || !deviceSecret || !isServerConnected || !currentSessionId) {
 			console.log("[TerminalStream] Missing required params, skipping");
 			return;
 		}
@@ -199,7 +201,18 @@ export function useTerminalStream(options: UseTerminalStreamOptions) {
 		}, CONNECTION_TIMEOUT_MS);
 
 		xhr.open("GET", url, true);
-		xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
+		// Shadow-signed (terminal streaming is queued for the build-order
+		// item 4 rewire; the endpoint below is the legacy opencode path).
+		const shadowHeaders = buildShadowHeaders(
+			deviceId,
+			deviceSecret,
+			"GET",
+			`/api/terminal/${currentSessionId}/stream`,
+			"",
+		);
+		for (const [key, value] of Object.entries(shadowHeaders)) {
+			xhr.setRequestHeader(key, value);
+		}
 		xhr.setRequestHeader("Accept", "text/event-stream");
 		xhr.setRequestHeader("Cache-Control", "no-cache");
 
@@ -313,7 +326,8 @@ export function useTerminalStream(options: UseTerminalStreamOptions) {
 		xhr.send();
 	}, [
 		serverUrl,
-		authToken,
+		deviceId,
+		deviceSecret,
 		isServerConnected,
 		clearTimers,
 		scheduleReconnect,

@@ -65,14 +65,13 @@ export default function ManualScreen() {
 	const { colors } = useTheme();
 	const [connectionType, setConnectionType] = useState<ConnectionType>("local");
 	const [serverUrl, setServerUrl] = useState("");
-	const [password, setPassword] = useState("");
-	const { connectWithPassword, isConnecting } = useServerConnection();
+	const { startPairing, isConnecting } = useServerConnection();
 
 	const config = CONFIGS[connectionType];
 
 	async function handleConnect() {
 		if (!serverUrl.trim()) {
-			Alert.alert("Error", "Please enter a server URL");
+			Alert.alert("Error", "Please enter your node URL");
 			return;
 		}
 
@@ -89,16 +88,25 @@ export default function ManualScreen() {
 				url = `${isCloudflare ? "https" : "http"}://${url}`;
 			}
 
-			await connectWithPassword(url, password);
+			const session = await startPairing(url);
 
-			// Navigate to directory selection so user can choose their project directory
+			// Show the pairing code; the node (or an owner device) must
+			// approve before credentials are issued.
 			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-			router.replace("/onboarding/directory");
+			router.push({
+				pathname: "/onboarding/pairing",
+				params: {
+					pairing_id: session.pairing_id,
+					code: session.code,
+					expires_in_seconds: String(session.expires_in_seconds),
+					serverUrl: session.serverUrl,
+				},
+			});
 		} catch (error) {
 			Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 			Alert.alert(
 				"Connection Failed",
-				error instanceof Error ? error.message : "Could not connect to server",
+				error instanceof Error ? error.message : "Could not reach the node",
 			);
 		}
 	}
@@ -128,7 +136,7 @@ export default function ManualScreen() {
 						{ color: colors.foreground, marginTop: Spacing.md },
 					]}
 				>
-					Connect to Server
+					Connect to Node
 				</Text>
 				<Text
 					style={[
@@ -136,7 +144,7 @@ export default function ManualScreen() {
 						{ color: colors.mutedForeground, marginTop: 8, lineHeight: 20 },
 					]}
 				>
-					Enter your server details below
+					Enter your Shadow Node address below
 				</Text>
 
 				{/* Connection type tabs */}
@@ -171,10 +179,10 @@ export default function ManualScreen() {
 					})}
 				</View>
 
-				{/* Server URL */}
+				{/* Node URL */}
 				<View style={styles.field}>
 					<Input
-						label="Server URL"
+						label="Node URL"
 						value={serverUrl}
 						onChangeText={setServerUrl}
 						placeholder={config.placeholder}
@@ -182,19 +190,6 @@ export default function ManualScreen() {
 						autoCorrect={false}
 						keyboardType="url"
 						helperText={config.hint}
-					/>
-				</View>
-
-				{/* Password */}
-				<View style={styles.field}>
-					<Input
-						label="Password (optional)"
-						value={password}
-						onChangeText={setPassword}
-						placeholder="Enter UI password"
-						autoCapitalize="none"
-						autoCorrect={false}
-						secureTextEntry
 					/>
 				</View>
 
@@ -208,7 +203,7 @@ export default function ManualScreen() {
 						isLoading={isConnecting}
 						style={{ width: "100%" }}
 					>
-						<Button.Label>{isConnecting ? "Connecting..." : "Connect"}</Button.Label>
+						<Button.Label>{isConnecting ? "Contacting node..." : "Pair with Node"}</Button.Label>
 					</Button>
 				</View>
 			</ScrollView>

@@ -1,3 +1,4 @@
+import { buildShadowHeaders } from "./shadowAuth";
 import { getConnectionState } from "../stores/useConnectionStore";
 
 const DEFAULT_TIMEOUT_MS = 15000;
@@ -103,15 +104,29 @@ function buildUrl(
 	return url.toString();
 }
 
-function getAuthHeaders(): Record<string, string> {
-	const { authToken } = getConnectionState();
+/**
+ * Shadow Node auth headers for one request. The node verifies
+ * HMAC-SHA256(secret, "METHOD\npath\nbody\nnonce\ntimestamp") from the
+ * x-shadow-* headers (see DeviceSessionStore.verify in the node's
+ * agent_core/security.py). Unsigned requests are sent without auth
+ * headers (used only before pairing completes).
+ */
+function getAuthHeaders(
+	method: string,
+	path: string,
+	bodyString: string | null,
+): Record<string, string> {
+	const { deviceId, deviceSecret } = getConnectionState();
 	const headers: Record<string, string> = {
 		"Content-Type": "application/json",
 		Accept: "application/json",
 	};
 
-	if (authToken) {
-		headers.Authorization = `Bearer ${authToken}`;
+	if (deviceId && deviceSecret) {
+		Object.assign(
+			headers,
+			buildShadowHeaders(deviceId, deviceSecret, method, path, bodyString ?? ""),
+		);
 	}
 
 	return headers;
@@ -235,15 +250,17 @@ export async function apiRequest<T>(
 	}
 
 	const url = buildUrl(path, queryParams);
-	const headers = getAuthHeaders();
-	
+	const bodyString = rawBody ?? (body ? JSON.stringify(body) : null);
+	// The node signs request.url.path only (no query string).
+	const signPath = new URL(url).pathname;
+	const headers = getAuthHeaders(method, signPath, bodyString);
+
 	if (contentType) {
 		headers["Content-Type"] = contentType;
 	}
 
-	debugLog(`${method} ${url}`, { includeDirectory, directory, hasAuth: !!headers.Authorization });
+	debugLog(`${method} ${url}`, { includeDirectory, directory, hasAuth: !!headers["x-shadow-device-id"] });
 
-	const bodyString = rawBody ?? (body ? JSON.stringify(body) : null);
 	let lastError: Error | null = null;
 
 	for (let attempt = 0; attempt <= retries; attempt++) {
