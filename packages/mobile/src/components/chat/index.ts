@@ -13,6 +13,6 @@ export type { Permission, PermissionResponse } from "./permission";
 export { PermissionCard } from "./permission";
 export { StatusRow } from "./StatusRow";
 export { TimelineSheet } from "./TimelineSheet";
-export type { Message, MessagePart, TokenBreakdown } from "./types";
+export type { Message, MessagePart, TokenBreakdown, AgentSource } from "./types";
 export { convertStreamingPart } from "./types";
 export { useMessageActions } from "./useMessageActions";
