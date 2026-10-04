@@ -33,12 +33,20 @@
       },
       "supportsTablet": true
     },
+    "android": {
+      "package": "ai.shadow.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#100F0F"
+      }
+    },
     "name": "SHADOW",
     "newArchEnabled": true,
     "orientation": "portrait",
     "owner": "heynerd",
     "platforms": [
-      "ios"
+      "ios",
+      "android"
     ],
     "plugins": [
       "expo-router",
@@ -72,7 +80,13 @@
           "faceIDPermission": "Allow SHADOW to use Face ID to protect the app"
         }
       ],
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#100F0F"
+        }
+      ],
       [
         "expo-file-system",
         {
