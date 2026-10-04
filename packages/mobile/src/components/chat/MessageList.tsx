@@ -16,6 +16,7 @@ import { TextLoop } from "../ui/TextLoop";
 import { ChatMessage } from "./ChatMessage";
 import { messageListStyles } from "./MessageList.styles";
 import type { Message } from "./types";
+import { visibleMessages } from "./visibleMessages";
 
 	type MessageListProps = {
 		messages: Message[];
@@ -89,12 +90,17 @@ export function MessageList({
 	const lastContentHeightRef = useRef(0);
 	const lastScrollOffsetRef = useRef(0);
 
+	// Visible-message filter (OpenDots backlog #8): hide internal receipts
+	// (step markers, lone tool-result parts) and show only messages with
+	// text content or with tool calls rendered as cards.
+	const visible = useMemo(() => visibleMessages(messages), [messages]);
+
 	const extraData = useMemo(
 		() => ({
-			messageCount: messages.length,
+			messageCount: visible.length,
 			isLoading,
 		}),
-		[messages.length, isLoading],
+		[visible.length, isLoading],
 	);
 
 	const hasMoreRef = useRef(hasMore);
@@ -106,7 +112,7 @@ export function MessageList({
 	const renderItem = useCallback(
 		({ item, index }: { item: Message; index: number }) => {
 			// Determine if we should show header based on previous message
-			const previousMessage = index > 0 ? messages[index - 1] : null;
+			const previousMessage = index > 0 ? visible[index - 1] : null;
 			const showHeader = !previousMessage || previousMessage.role === "user";
 
 			return (
@@ -119,7 +125,7 @@ export function MessageList({
 				/>
 			);
 		},
-		[messages, onRevert, onFork, onSelectSession],
+		[visible, onRevert, onFork, onSelectSession],
 	);
 
 	const keyExtractor = useCallback((item: Message) => item.id, []);
@@ -141,11 +147,11 @@ export function MessageList({
 				return;
 			}
 
-			if (messages.length > 0 && !showScrollButton) {
+			if (visible.length > 0 && !showScrollButton) {
 				listRef.current?.scrollToEnd({ animated: true });
 			}
 		},
-		[messages.length, showScrollButton],
+		[visible.length, showScrollButton],
 	);
 
 	const handleScroll = useCallback(
@@ -178,7 +184,7 @@ export function MessageList({
 		listRef.current?.scrollToEnd({ animated: true });
 	}, []);
 
-	if (messages.length === 0 && !isLoading) {
+	if (visible.length === 0 && !isLoading) {
 		return <EmptyState />;
 	}
 
@@ -186,7 +192,7 @@ export function MessageList({
 		<View className={messageListStyles.container({})}>
 		<FlashList
 			ref={listRef}
-			data={messages}
+			data={visible}
 			renderItem={renderItem}
 			keyExtractor={keyExtractor}
 			extraData={extraData}
@@ -202,7 +208,7 @@ export function MessageList({
 		/>
 
 			{/* Scroll-to-bottom button */}
-			{showScrollButton && messages.length > 0 && (
+			{showScrollButton && visible.length > 0 && (
 				<View
 					className={messageListStyles.scrollToBottomButton({})}
 					style={{
