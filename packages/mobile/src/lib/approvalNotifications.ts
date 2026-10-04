@@ -20,19 +20,46 @@
  * through routing alone. The response handler below both deep-links into the
  * tabs stack and emits through onApprovalNotificationTap, which TabsLayout
  * subscribes to in order to switch the visible tab.
+ *
+ * The shadow.approval category also carries Approve / Decline action
+ * buttons. Actions are handled in the background via the same HMAC-signed
+ * httpClient path as foreground requests (no new auth mechanism); approvals
+ * flagged requires_double_confirmation (or risk blocked) are never decided
+ * one-tap and instead deep-link into the app for the in-app confirm step.
+ * A 409 (already decided) recovers through GET /approvals/receipt.
  */
 import Constants from "expo-constants";
 import * as Device from "expo-device";
+import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
-import { ApiError, apiPost } from "./httpClient";
-import { getConnectionState } from "../stores/useConnectionStore";
+import { ApiError, apiGet, apiPost } from "./httpClient";
+import {
+	getConnectionState,
+	useConnectionStore,
+} from "../stores/useConnectionStore";
+import { approvalsApi, type ApprovalPage, type ApprovalRequest } from "../api/approvals";
 
 /** Android channel id for approval-request notifications. */
 export const APPROVALS_CHANNEL_ID = "approvals";
+
+/**
+ * Notification category id the node attaches to approval pushes
+ * (apps/shadow-node/shadow_node/main.py:149, category_id="shadow.approval").
+ */
+export const APPROVAL_CATEGORY_ID = "shadow.approval";
+/** Action identifiers for inline approve/decline from the notification. */
+export const APPROVE_ACTION_ID = "shadow.approve";
+export const DECLINE_ACTION_ID = "shadow.decline";
+/**
+ * Reason recorded when declining from a notification. Notification actions
+ * offer no text input, so a fixed reason is used and surfaced in the audit
+ * log; a custom reason requires deciding inside the app.
+ */
+export const NOTIFICATION_DECLINE_REASON = "Declined from notification";
 
 /**
  * App version at which notification permission was last requested. A denial
@@ -155,6 +182,200 @@ export function onApprovalNotificationTap(
 	};
 }
 
+/**
+ * Register the shadow.approval category with Approve / Decline buttons.
+ * iOS renders the buttons on notification expand; Android renders them
+ * inline on the approvals channel once the category is set. Both actions
+ * run without foregrounding the app (opensAppToForeground: false).
+ * Idempotent; safe to call on every app start.
+ */
+async function setupNotificationCategory(): Promise<void> {
+	await Notifications.setNotificationCategoryAsync(APPROVAL_CATEGORY_ID, [
+		{
+			identifier: APPROVE_ACTION_ID,
+			buttonTitle: "Approve",
+			options: { opensAppToForeground: false },
+		},
+		{
+			identifier: DECLINE_ACTION_ID,
+			buttonTitle: "Decline",
+			options: { opensAppToForeground: false, isDestructive: true },
+		},
+	]);
+}
+
+function approvalTitle(approval: ApprovalRequest): string {
+	const title = approval.action.description || approval.action.tool_name;
+	return title.length > 60 ? `${title.slice(0, 57)}...` : title;
+}
+
+interface DecisionOutcome {
+	ok: boolean;
+	message: string;
+}
+
+/**
+ * Locate a pending (or recently decided) approval by id. The push payload
+ * carries only approval_id, so the (thread_id, tool_call_id) receipt key is
+ * recovered here for the 409 path.
+ */
+async function findApproval(
+	approvalId: string,
+): Promise<ApprovalRequest | null> {
+	try {
+		const pending = await approvalsApi.listPending();
+		const found = pending.items.find((a) => a.id === approvalId);
+		if (found) {
+			return found;
+		}
+	} catch (error) {
+		console.warn("[push] failed to list pending approvals", error);
+	}
+	// Not pending: it may already be decided. The unfiltered list carries
+	// statuses (approved/denied/expired/consumed) for a definitive answer.
+	try {
+		const all = await apiGet<ApprovalPage>("/approvals", {});
+		return all.items.find((a) => a.id === approvalId) ?? null;
+	} catch (error) {
+		console.warn("[push] failed to list approvals", error);
+		return null;
+	}
+}
+
+/**
+ * Decide an approval from a notification action, entirely in the background.
+ *
+ * Server contract (apps/shadow-node/shadow_node/main.py:1366-1381,
+ * packages/agent-core/agent_core/core.py:85-105):
+ * - POST /approvals/{id}/approve -> decided ApprovalRequest | 409 when
+ *   already decided or expired.
+ * - POST /approvals/{id}/deny {reason} -> decided ApprovalRequest | 409.
+ * - GET /approvals/receipt?thread_id&tool_call_id -> the decided approval
+ *   for idempotent recovery (404 when no receipt exists).
+ *
+ * Security posture: the request is HMAC-signed with the device secret via
+ * the same httpClient path as foreground requests (no new auth mechanism).
+ * Approvals flagged requires_double_confirmation (or risk blocked) are
+ * NEVER decided one-tap: the action deep-links into the app instead, where
+ * the in-app second-confirm step applies.
+ *
+ * A cold start from a notification action may fire before the connection
+ * store hydrates, so initialization is ensured here; SecureStore is
+ * accessible in the background task context on both platforms.
+ */
+async function decideFromNotification(
+	approvalId: string,
+	approve: boolean,
+): Promise<DecisionOutcome> {
+	const store = useConnectionStore.getState();
+	if (!store.isInitialized) {
+		await store.initialize();
+	}
+	const { isConnected } = useConnectionStore.getState();
+	if (!isConnected) {
+		return { ok: false, message: "Device is not paired with a Shadow Node." };
+	}
+
+	const approval = await findApproval(approvalId);
+	if (!approval) {
+		return {
+			ok: false,
+			message: "Approval not found. It may have expired.",
+		};
+	}
+
+	if (
+		approval.requires_double_confirmation ||
+		approval.risk_label === "blocked"
+	) {
+		// Sensitive approvals need the in-app confirm step; never one-tap.
+		router.push("/(tabs)/approvals");
+		emitApprovalNotificationTap(approvalId);
+		return { ok: true, message: "Opened in the app for confirmation." };
+	}
+
+	if (approval.status !== "pending") {
+		return { ok: false, message: `Already ${approval.status}.` };
+	}
+
+	try {
+		const decided = approve
+			? await approvalsApi.approve(approval.id)
+			: await approvalsApi.deny(approval.id, NOTIFICATION_DECLINE_REASON);
+		return {
+			ok: true,
+			message: `${decided.status === "approved" ? "Approved" : "Declined"}: ${approvalTitle(approval)}`,
+		};
+	} catch (error) {
+		if (
+			error instanceof ApiError &&
+			error.status === 409 &&
+			approval.thread_id &&
+			approval.tool_call_id
+		) {
+			// Lost race: someone decided it between our read and our write.
+			// Recover the decided state via the idempotency receipt.
+			try {
+				const { approval: decided } = await approvalsApi.receipt(
+					approval.thread_id,
+					approval.tool_call_id,
+				);
+				return { ok: true, message: `Already ${decided.status}.` };
+			} catch {
+				return { ok: false, message: "Already decided." };
+			}
+		}
+		throw error;
+	}
+}
+
+/**
+ * Handle an Approve / Decline notification action: decide in the background,
+ * dismiss the acted-on notification, and post a brief local confirmation.
+ * Failures surface as an error confirmation rather than silently dropping.
+ */
+async function handleNotificationAction(
+	response: Notifications.NotificationResponse,
+	approve: boolean,
+): Promise<void> {
+	const data = response.notification.request.content.data as
+		| Record<string, unknown>
+		| null
+		| undefined;
+	const approvalId =
+		typeof data?.approval_id === "string" ? data.approval_id : null;
+	if (!approvalId) {
+		return;
+	}
+
+	let outcome: DecisionOutcome;
+	try {
+		outcome = await decideFromNotification(approvalId, approve);
+	} catch (error) {
+		outcome = {
+			ok: false,
+			message:
+				error instanceof Error ? error.message : "Decision failed unexpectedly.",
+		};
+	}
+
+	await Notifications.dismissNotificationAsync(
+		response.notification.request.identifier,
+	).catch(() => undefined);
+	await Notifications.scheduleNotificationAsync({
+		content: {
+			title: outcome.ok ? "Decision recorded" : "Could not decide",
+			body: outcome.message,
+		},
+		trigger: null,
+	}).catch(() => undefined);
+	Haptics.notificationAsync(
+		outcome.ok
+			? Haptics.NotificationFeedbackType.Success
+			: Haptics.NotificationFeedbackType.Error,
+	).catch(() => undefined);
+}
+
 function emitApprovalNotificationTap(approvalId: string | null): void {
 	for (const listener of approvalTapListeners) {
 		try {
@@ -188,6 +409,10 @@ export function setupNotificationHandlers(): () => void {
 		}),
 	});
 
+	setupNotificationCategory().catch((error: unknown) => {
+		console.warn("[push] failed to register notification category", error);
+	});
+
 	if (Platform.OS === "android") {
 		Notifications.setNotificationChannelAsync(APPROVALS_CHANNEL_ID, {
 			name: "Approval requests",
@@ -206,6 +431,19 @@ export function setupNotificationHandlers(): () => void {
 				| null
 				| undefined;
 			if (data?.type === "approval.created") {
+				const actionId = response.actionIdentifier;
+				if (
+					actionId === APPROVE_ACTION_ID ||
+					actionId === DECLINE_ACTION_ID
+				) {
+					// Inline Approve / Decline from the notification shade.
+					// Runs in the background; never foregrounds the app.
+					void handleNotificationAction(
+						response,
+						actionId === APPROVE_ACTION_ID,
+					);
+					return;
+				}
 				router.push("/(tabs)/approvals");
 				emitApprovalNotificationTap(
 					typeof data.approval_id === "string" ? data.approval_id : null,
