@@ -79,6 +79,7 @@ export default {
             'Allow SHADOW to use Face ID to protect the app',
         },
       ],
+      'expo-notifications',
       [
         'expo-file-system',
         {

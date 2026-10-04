@@ -9,6 +9,11 @@ import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider, useTheme } from "../src/theme";
+import {
+	ensurePushRegistration,
+	setupNotificationHandlers,
+} from "../src/lib/approvalNotifications";
+import { useConnectionStore } from "../src/stores/useConnectionStore";
 
 // Keep the splash screen visible until we explicitly hide it
 // This MUST be called at module level (not inside components) to work reliably in preview builds
@@ -59,6 +64,36 @@ export default function RootLayout() {
 		"IBMPlexMono-Bold": require("../assets/fonts/IBMPlexMono-Bold.ttf"),
 	});
 	/* eslint-enable @typescript-eslint/no-require-imports */
+
+	// Push-notification wiring (Phase 4): install the foreground handler and
+	// the approval-tap response listener once for the app lifetime.
+	useEffect(() => {
+		const unsubscribe = setupNotificationHandlers();
+		return unsubscribe;
+	}, []);
+
+	// After pairing completes (or on app start when already paired), request
+	// push permission once per app version and register the Expo push token
+	// with the node. Idempotent and non-nagging; see ensurePushRegistration.
+	const isInitialized = useConnectionStore((s) => s.isInitialized);
+	const isConnected = useConnectionStore((s) => s.isConnected);
+	useEffect(() => {
+		if (!isInitialized || !isConnected) {
+			return;
+		}
+		ensurePushRegistration()
+			.then((outcome) => {
+				if (__DEV__) {
+					console.log(`[push] registration outcome: ${outcome}`);
+				}
+			})
+			.catch((error: unknown) => {
+				console.warn(
+					"[push] registration failed:",
+					error instanceof Error ? error.message : error,
+				);
+			});
+	}, [isInitialized, isConnected]);
 
 	useEffect(() => {
 		if (fontError) {
