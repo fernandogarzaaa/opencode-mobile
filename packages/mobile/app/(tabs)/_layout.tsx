@@ -20,6 +20,7 @@ import {
 } from "../../src/lib/sessionSync";
 import { useConnectionStore } from "../../src/stores/useConnectionStore";
 import { useTheme } from "../../src/theme";
+import { SetupGate } from "../../src/components/layout/SetupGate";
 import ChatScreen from "./chat";
 import DiffScreen from "./diff";
 import GitScreen from "./git";
@@ -310,7 +311,12 @@ export default function TabsLayout() {
 						contextUsage={contextUsage}
 						diffFileCount={diffFileCount}
 					/>
-					<View style={styles.content}>{renderContent()}</View>
+					{/* Setup gate (OpenDots backlog #9): block tab content until
+					    the device is paired and credentials are configured.
+					    Deep links can land here bypassing the index redirect. */}
+					<SetupGate>
+						<View style={styles.content}>{renderContent()}</View>
+					</SetupGate>
 
 					<SessionSheet
 						ref={sheetRef}
