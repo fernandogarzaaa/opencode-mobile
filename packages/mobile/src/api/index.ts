@@ -42,6 +42,13 @@ export type {
 export { terminalApi } from "./terminal";
 export type { ProjectInfo, ServerPathInfo } from "./server";
 export { serverApi } from "./server";
+export type {
+	Artifact,
+	ArtifactKind,
+	ArtifactMeta,
+	ArtifactVersionInfo,
+} from "./artifacts";
+export { artifactsApi } from "./artifacts";
 export type { AgentSource, AskStreamDone, AskStreamHandlers } from "./agent";
 export { agentApi, askAgentStream } from "./agent";
 export type { Skill, SkillConfig } from "./skills";

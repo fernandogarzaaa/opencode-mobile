@@ -5,18 +5,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type ContextUsage, ContextUsageDisplay } from "@/components/chat";
 import {
 	ChatIcon,
-	CodeIcon,
-	GitBranchIcon,
+	FileIcon,
 	LockIcon,
 	PlaylistAddIcon,
 	SettingsIcon,
-	TerminalIcon,
 } from "@/components/icons";
 import { IconButton } from "@/components/ui";
 import { useTheme } from "@/theme";
 import { headerStyles } from "./Header.styles";
 
-type MainTab = "approvals" | "chat" | "diff" | "terminal" | "git";
+type MainTab = "approvals" | "chat" | "artifacts";
 
 interface TabConfig {
 	id: MainTab;
@@ -26,9 +24,7 @@ interface TabConfig {
 const tabs: TabConfig[] = [
 	{ id: "approvals", label: "Approvals" },
 	{ id: "chat", label: "Chat" },
-	{ id: "diff", label: "Diff" },
-	{ id: "terminal", label: "Terminal" },
-	{ id: "git", label: "Git" },
+	{ id: "artifacts", label: "Artifacts" },
 ];
 
 interface HeaderProps {
@@ -39,7 +35,6 @@ interface HeaderProps {
 	onSessionsPress?: () => void;
 	hasUpdate?: boolean;
 	contextUsage?: ContextUsage | null;
-	diffFileCount?: number;
 	approvalCount?: number;
 }
 
@@ -49,12 +44,8 @@ function getTabIcon(tabId: MainTab, color: string, size: number) {
 			return <LockIcon color={color} size={size} />;
 		case "chat":
 			return <ChatIcon color={color} size={size} />;
-		case "diff":
-			return <CodeIcon color={color} size={size} />;
-		case "terminal":
-			return <TerminalIcon color={color} size={size} />;
-		case "git":
-			return <GitBranchIcon color={color} size={size} />;
+		case "artifacts":
+			return <FileIcon color={color} size={size} />;
 	}
 }
 
@@ -66,7 +57,6 @@ export function Header({
 	onSessionsPress,
 	hasUpdate = false,
 	contextUsage,
-	diffFileCount = 0,
 	approvalCount = 0,
 }: HeaderProps) {
 	const insets = useSafeAreaInsets();
@@ -114,7 +104,6 @@ export function Header({
 					<View className="flex-row items-center">
 						{tabs.map((tab) => {
 							const isActive = activeTab === tab.id;
-							const showDiffDot = tab.id === "diff" && diffFileCount > 0;
 							const showApprovalBadge =
 								tab.id === "approvals" && approvalCount > 0;
 
@@ -133,13 +122,6 @@ export function Header({
 											tab.id,
 											isActive ? colors.foreground : colors.mutedForeground,
 											20,
-										)}
-										{/* Dot indicator for diff tab when there are changes */}
-										{showDiffDot && (
-											<View
-												className={headerStyles.changeDot({})}
-												style={{ backgroundColor: colors.primary }}
-											/>
 										)}
 										{/* Pending-count badge on the approvals tab */}
 										{showApprovalBadge && (
