@@ -13,6 +13,12 @@ const getBundleId = () => {
   return 'ai.shadow.app';
 };
 
+const getAndroidPackage = () => {
+  if (IS_DEV) return 'ai.shadow.app.dev';
+  if (IS_PREVIEW) return 'ai.shadow.app.preview';
+  return 'ai.shadow.app';
+};
+
 export default {
   expo: {
     name: getAppName(),
@@ -23,7 +29,7 @@ export default {
     scheme: 'shadow',
     userInterfaceStyle: 'automatic',
     newArchEnabled: true,
-    platforms: ['ios'],
+    platforms: ['ios', 'android'],
     splash: {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
@@ -48,6 +54,13 @@ export default {
       },
       config: {
         usesNonExemptEncryption: false,
+      },
+    },
+    android: {
+      package: getAndroidPackage(),
+      adaptiveIcon: {
+        foregroundImage: './assets/adaptive-icon.png',
+        backgroundColor: '#100F0F',
       },
     },
     plugins: [
@@ -79,7 +92,13 @@ export default {
             'Allow SHADOW to use Face ID to protect the app',
         },
       ],
-      'expo-notifications',
+      [
+        'expo-notifications',
+        {
+          icon: './assets/notification-icon.png',
+          color: '#100F0F',
+        },
+      ],
       [
         'expo-file-system',
         {
