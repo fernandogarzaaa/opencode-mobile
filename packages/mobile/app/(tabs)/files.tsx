@@ -278,7 +278,7 @@ function ArtifactDetail({
 	}, [load]);
 
 	return (
-		<View style={[styles.container, { backgroundColor: colors.background }]}>
+		<View style={styles.container}>
 			<View style={[styles.detailHeader, { borderBottomColor: colors.border }]}>
 				<Pressable
 					onPress={onBack}
@@ -572,7 +572,7 @@ export default function FilesScreen() {
 			<View
 				style={[
 					styles.container,
-					{ backgroundColor: colors.background, paddingTop: insets.top },
+					{ paddingTop: insets.top },
 				]}
 			>
 				<ArtifactDetail
@@ -588,10 +588,7 @@ export default function FilesScreen() {
 
 	return (
 		<View
-			style={[
-				styles.container,
-				{ backgroundColor: colors.background, paddingTop: insets.top },
-			]}
+			style={[styles.container, { paddingTop: insets.top }]}
 		>
 			<View style={[styles.header, { borderBottomColor: colors.border }]}>
 				<Text style={[typography.uiHeader, { color: colors.foreground }]}>

@@ -212,10 +212,7 @@ export default function ApprovalsScreen() {
 	if (loading) {
 		return (
 			<View
-				style={[
-					styles.container,
-					{ backgroundColor: colors.background },
-				]}
+				style={styles.container}
 			>
 				<View style={styles.skeletonList}>
 					<SkeletonCard />
@@ -231,7 +228,6 @@ export default function ApprovalsScreen() {
 				style={[
 					styles.container,
 					styles.centered,
-					{ backgroundColor: colors.background },
 				]}
 			>
 				<Text
@@ -273,9 +269,7 @@ export default function ApprovalsScreen() {
 	}
 
 	return (
-		<View
-			style={[styles.container, { backgroundColor: colors.background }]}
-		>
+		<View style={styles.container}>
 			<FlatList
 				data={items}
 				keyExtractor={(item) => item.id}

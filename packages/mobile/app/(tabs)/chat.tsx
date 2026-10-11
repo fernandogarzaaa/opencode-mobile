@@ -219,7 +219,7 @@ export default function ChatScreen() {
 	const keyboardOffset = HEADER_HEIGHT + insets.top;
 
 	return (
-		<View style={[styles.container, { backgroundColor: colors.background }]}>
+		<View style={styles.container}>
 			<KeyboardAvoidingView
 				behavior={Platform.OS === "ios" ? "padding" : "height"}
 				style={styles.container}

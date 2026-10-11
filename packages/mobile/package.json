@@ -30,7 +30,8 @@
     "maestro": "source .maestro/.env && maestro test .maestro/flows",
     "maestro:studio": "source .maestro/.env && maestro studio",
     "maestro:record": "source .maestro/.env && maestro record",
-    "maestro:ai": "source .maestro/.env && maestro test .maestro/flows/ai-explore.yaml"
+    "maestro:ai": "source .maestro/.env && maestro test .maestro/flows/ai-explore.yaml",
+    "test": "jest"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.8",
@@ -74,12 +75,17 @@
   "devDependencies": {
     "@babel/core": "^7.28.5",
     "@expo/config-plugins": "~54.0.4",
+    "@stryker-mutator/core": "^10.0.0",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.0.14",
     "babel-preset-expo": "^54.0.9",
+    "jest": "^30.5.2",
+    "react-test-renderer": "19.1.0",
     "sharp": "^0.34.5",
     "tailwind-merge": "^3.4.0",
     "tailwind-variants": "^3.2.2",
     "tailwindcss": "^4.1.18",
+    "ts-jest": "^29.4.14",
     "typescript": "~5.9.3"
   }
 }
