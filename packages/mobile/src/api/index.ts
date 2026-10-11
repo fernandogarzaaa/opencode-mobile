@@ -53,3 +53,16 @@ export type { AgentSource, AskStreamDone, AskStreamHandlers } from "./agent";
 export { agentApi, askAgentStream } from "./agent";
 export type { Skill, SkillConfig } from "./skills";
 export { skillsApi, isSkillBuiltIn, isSkillHidden } from "./skills";
+export type {
+	Panel,
+	PanelProposal,
+	PanelParseResult,
+	PanelRow,
+	PanelTile,
+	CustomPanelDef,
+	CustomPanelCreate,
+	CustomPanelSource,
+	CustomPanelFilter,
+	CustomPanelSort,
+} from "./panels";
+export { panelsApi, PanelsCache, PANELS_CACHE_TTL_MS } from "./panels";

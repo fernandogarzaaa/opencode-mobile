@@ -27,6 +27,7 @@
     "build:production": "eas build --profile production --platform ios",
     "type-check": "tsc --noEmit",
     "lint": "eslint \"./src/**/*.{ts,tsx}\" --config ../../eslint.config.js",
+    "test": "jest",
     "maestro": "source .maestro/.env && maestro test .maestro/flows",
     "maestro:studio": "source .maestro/.env && maestro studio",
     "maestro:record": "source .maestro/.env && maestro record",
@@ -80,6 +81,11 @@
     "tailwind-merge": "^3.4.0",
     "tailwind-variants": "^3.2.2",
     "tailwindcss": "^4.1.18",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.14",
+    "@types/jest": "^30.0.0",
+    "@stryker-mutator/core": "^10.0.0",
+    "react-test-renderer": "^19.1.0"
   }
 }
