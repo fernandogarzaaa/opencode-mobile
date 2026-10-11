@@ -210,6 +210,37 @@ describe("validateUserProfile", () => {
 		expect(validateUserProfile(p)).toHaveLength(1);
 	});
 
+	it("accepts the boundary days of January and December", () => {
+		// Kills the mutants that shift the month/day boundary comparisons.
+		for (const birthday of ["2000-01-01", "2000-01-31", "2000-12-01", "2000-12-31"]) {
+			expect(
+				validateUserProfile(
+					setProfileField(emptyUserProfile(), "identity.birthday", birthday),
+				),
+			).toEqual([]);
+		}
+	});
+
+	it("rejects day 32 in any month", () => {
+		for (const birthday of ["2000-01-32", "2000-12-32"]) {
+			expect(
+				validateUserProfile(
+					setProfileField(emptyUserProfile(), "identity.birthday", birthday),
+				),
+			).toHaveLength(1);
+		}
+	});
+
+	it("trims a padded but otherwise valid birthday", () => {
+		// Kills the mutant that drops the .trim() call.
+		const p = setProfileField(
+			emptyUserProfile(),
+			"identity.birthday",
+			"  2000-01-01  ",
+		);
+		expect(validateUserProfile(p)).toEqual([]);
+	});
+
 	it("does not flag other free-text fields", () => {
 		const p: UserProfile = {
 			identity: { displayName: "Ada!", nickname: "@#$", birthday: "" },
@@ -359,6 +390,37 @@ describe("PROFILE_SECTIONS", () => {
 			(f) => f.key === "identity.birthday",
 		);
 		expect(birthday?.placeholder).toBe("YYYY-MM-DD");
+	});
+
+	it("keeps every label and placeholder exact", () => {
+		// Kills the string-literal mutants that blank out copy.
+		const byKey = Object.fromEntries(
+			PROFILE_SECTIONS.flatMap((s) => s.fields).map((f) => [f.key, f]),
+		) as Record<ProfileFieldKey, { label: string; placeholder: string }>;
+		expect(byKey["identity.displayName"]).toMatchObject({
+			label: "Display name",
+			placeholder: "Your name",
+		});
+		expect(byKey["identity.nickname"]).toMatchObject({
+			label: "Nickname",
+			placeholder: "What friends call you",
+		});
+		expect(byKey["identity.birthday"]).toMatchObject({
+			label: "Birthday",
+			placeholder: "YYYY-MM-DD",
+		});
+		expect(byKey["household.members"]).toMatchObject({
+			label: "Household members",
+			placeholder: "e.g. partner, two kids",
+		});
+		expect(byKey["household.pets"]).toMatchObject({
+			label: "Pets",
+			placeholder: "e.g. one senior dog",
+		});
+		expect(byKey["interests"]).toMatchObject({
+			label: "Interests",
+			placeholder: "e.g. specialty coffee, trail running, Rust",
+		});
 	});
 
 	it("marks only the free-text fields multiline", () => {
