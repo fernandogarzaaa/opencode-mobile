@@ -38,6 +38,10 @@ export default function SettingsIndexScreen() {
 		<SettingsScreen title="Settings" showClose>
 			<SettingsGroup>
 				<SettingsRow
+					title="Profile"
+					onPress={() => router.push("/settings/profile")}
+				/>
+				<SettingsRow
 					title="Connection"
 					onPress={() => router.push("/settings/connection")}
 				/>
