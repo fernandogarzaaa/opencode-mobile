@@ -226,10 +226,11 @@ export interface ProfileValidationError {
 const BIRTHDAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function isRealCalendarDate(value: string): boolean {
+	// The YYYY-MM-DD shape is already enforced by BIRTHDAY_RE; the
+	// round-trip through Date catches every impossible month/day
+	// (including Feb 29 on non-leap years), so no separate range
+	// guards are needed.
 	const [y, m, d] = value.split("-").map(Number);
-	if (m < 1 || m > 12 || d < 1 || d > 31) {
-		return false;
-	}
 	const date = new Date(y, m - 1, d);
 	return (
 		date.getFullYear() === y &&

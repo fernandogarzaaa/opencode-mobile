@@ -394,30 +394,30 @@ describe("PROFILE_SECTIONS", () => {
 
 	it("keeps every label and placeholder exact", () => {
 		// Kills the string-literal mutants that blank out copy.
-		const byKey = Object.fromEntries(
-			PROFILE_SECTIONS.flatMap((s) => s.fields).map((f) => [f.key, f]),
-		) as Record<ProfileFieldKey, { label: string; placeholder: string }>;
-		expect(byKey["identity.displayName"]).toMatchObject({
+		const byKey = new Map(
+			PROFILE_SECTIONS.flatMap((s) => s.fields).map((f) => [f.key, f] as const),
+		);
+		expect(byKey.get("identity.displayName")).toMatchObject({
 			label: "Display name",
 			placeholder: "Your name",
 		});
-		expect(byKey["identity.nickname"]).toMatchObject({
+		expect(byKey.get("identity.nickname")).toMatchObject({
 			label: "Nickname",
 			placeholder: "What friends call you",
 		});
-		expect(byKey["identity.birthday"]).toMatchObject({
+		expect(byKey.get("identity.birthday")).toMatchObject({
 			label: "Birthday",
 			placeholder: "YYYY-MM-DD",
 		});
-		expect(byKey["household.members"]).toMatchObject({
+		expect(byKey.get("household.members")).toMatchObject({
 			label: "Household members",
 			placeholder: "e.g. partner, two kids",
 		});
-		expect(byKey["household.pets"]).toMatchObject({
+		expect(byKey.get("household.pets")).toMatchObject({
 			label: "Pets",
 			placeholder: "e.g. one senior dog",
 		});
-		expect(byKey["interests"]).toMatchObject({
+		expect(byKey.get("interests")).toMatchObject({
 			label: "Interests",
 			placeholder: "e.g. specialty coffee, trail running, Rust",
 		});
