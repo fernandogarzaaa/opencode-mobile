@@ -6,6 +6,7 @@ module.exports = {
 	// Broad glob on purpose: PRs add their own *.test.* files without
 	// touching this config, so parallel feature branches merge cleanly.
 	testMatch: ["**/*.test.ts", "**/*.test.tsx"],
+	setupFiles: ["<rootDir>/jest.setup.js"],
 	moduleNameMapper: {
 		"^@/(.*)$": "<rootDir>/src/$1",
 	},

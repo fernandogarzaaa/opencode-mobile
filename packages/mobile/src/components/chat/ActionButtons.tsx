@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { ApprovalRequest } from "@/api/approvals";
 import { approvalsApi } from "@/api/approvals";
@@ -42,7 +42,10 @@ export function ActionButtons() {
 		[actionable],
 	);
 
-	const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+	const [dismissState, setDismissState] = useState<{
+		sig: string;
+		ids: Set<string>;
+	}>({ sig: "", ids: new Set() });
 	const [confirmingId, setConfirmingId] = useState<string | null>(null);
 	const [busyId, setBusyId] = useState<string | null>(null);
 	const [errorId, setErrorId] = useState<string | null>(null);
@@ -52,11 +55,14 @@ export function ActionButtons() {
 	const busyRef = useRef(false);
 
 	// Dismissals are scoped to the current pending set: new approvals
-	// bring the row back.
-	useEffect(() => {
-		setDismissed(new Set());
+	// bring the row back. Adjusted during render (React-endorsed pattern
+	// for state derived from props) instead of in an effect, so no async
+	// setState can fire after unmount.
+	if (dismissState.sig !== actionableIds) {
+		setDismissState({ sig: actionableIds, ids: new Set() });
 		setConfirmingId(null);
-	}, [actionableIds]);
+	}
+	const dismissed = dismissState.ids;
 
 	const visible = actionable.filter((a) => !dismissed.has(a.id));
 	if (visible.length === 0) {
@@ -79,7 +85,10 @@ export function ActionButtons() {
 			() => undefined,
 		);
 		setConfirmingId((current) => (current === id ? null : current));
-		setDismissed((prev) => new Set(prev).add(id));
+		setDismissState((prev) => ({
+			sig: prev.sig,
+			ids: new Set(prev.ids).add(id),
+		}));
 	};
 
 	const approve = async (approval: ApprovalRequest) => {

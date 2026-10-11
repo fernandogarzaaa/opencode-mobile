@@ -152,13 +152,19 @@ function dismissButtons(root: ReactTestInstance) {
 	);
 }
 
+function setItems(items: ApprovalRequest[]) {
+	act(() => {
+		useApprovalsStore.setState({ items });
+	});
+}
+
 beforeEach(() => {
 	jest.clearAllMocks();
-	useApprovalsStore.setState({ items: [] });
+	setItems([]);
 });
 
 afterEach(() => {
-	useApprovalsStore.setState({ items: [] });
+	setItems([]);
 });
 
 describe("ActionButtons", () => {
@@ -168,15 +174,13 @@ describe("ActionButtons", () => {
 	});
 
 	it("renders one approve button per actionable approval", () => {
-		useApprovalsStore.setState({
-			items: [
-				approvalFixture({ id: "a1" }),
-				approvalFixture({
-					id: "a2",
-					action: { tool_name: "shell", description: "Run tests" },
-				}),
-			],
-		});
+		setItems([
+			approvalFixture({ id: "a1" }),
+			approvalFixture({
+				id: "a2",
+				action: { tool_name: "shell", description: "Run tests" },
+			}),
+		]);
 		const tree = renderButtons();
 		const buttons = approveButtons(tree.root);
 		expect(buttons).toHaveLength(2);
@@ -187,23 +191,21 @@ describe("ActionButtons", () => {
 	});
 
 	it("skips blocked and expired approvals", () => {
-		useApprovalsStore.setState({
-			items: [
-				approvalFixture({ id: "ok" }),
-				approvalFixture({ id: "blocked", risk_label: "blocked" }),
-				approvalFixture({
-					id: "expired",
-					expires_at: "2020-01-01T00:00:00Z",
-				}),
-			],
-		});
+		setItems([
+			approvalFixture({ id: "ok" }),
+			approvalFixture({ id: "blocked", risk_label: "blocked" }),
+			approvalFixture({
+				id: "expired",
+				expires_at: "2020-01-01T00:00:00Z",
+			}),
+		]);
 		const tree = renderButtons();
 		expect(approveButtons(tree.root)).toHaveLength(1);
 	});
 
 	it("approves through the approval gate on tap", async () => {
 		const approval = approvalFixture();
-		useApprovalsStore.setState({ items: [approval] });
+		setItems([approval]);
 		mockApprove.mockResolvedValue(decidedFixture(approval));
 
 		const tree = renderButtons();
@@ -224,7 +226,7 @@ describe("ActionButtons", () => {
 			requires_double_confirmation: true,
 			risk_label: "high",
 		});
-		useApprovalsStore.setState({ items: [approval] });
+		setItems([approval]);
 		mockApprove.mockResolvedValue(decidedFixture(approval));
 
 		const tree = renderButtons();
@@ -250,12 +252,7 @@ describe("ActionButtons", () => {
 	});
 
 	it("dismisses a single row without touching the approval", () => {
-		useApprovalsStore.setState({
-			items: [
-				approvalFixture({ id: "a1" }),
-				approvalFixture({ id: "a2" }),
-			],
-		});
+		setItems([approvalFixture({ id: "a1" }), approvalFixture({ id: "a2" })]);
 		const tree = renderButtons();
 		expect(approveButtons(tree.root)).toHaveLength(2);
 
@@ -274,7 +271,7 @@ describe("ActionButtons", () => {
 
 	it("refetches the pending list when the decision raced (409)", async () => {
 		const approval = approvalFixture();
-		useApprovalsStore.setState({ items: [approval] });
+		setItems([approval]);
 		mockApprove.mockRejectedValue(new ApiError("conflict", 409));
 		mockListPending.mockResolvedValue({ items: [], count: 0, next_cursor: null });
 
@@ -290,7 +287,7 @@ describe("ActionButtons", () => {
 
 	it("shows an inline error when approval fails", async () => {
 		const approval = approvalFixture();
-		useApprovalsStore.setState({ items: [approval] });
+		setItems([approval]);
 		mockApprove.mockRejectedValue(new Error("network down"));
 
 		const tree = renderButtons();
@@ -313,7 +310,7 @@ describe("ActionButtons", () => {
 
 	it("blocks a second tap while an approval is in flight", async () => {
 		const approval = approvalFixture();
-		useApprovalsStore.setState({ items: [approval] });
+		setItems([approval]);
 		let resolveApprove!: (v: ApprovalRequest) => void;
 		mockApprove.mockImplementation(
 			() =>
@@ -340,7 +337,7 @@ describe("ActionButtons", () => {
 
 	it("shows an inline error for a non-409 API failure without refetching", async () => {
 		const approval = approvalFixture();
-		useApprovalsStore.setState({ items: [approval] });
+		setItems([approval]);
 		mockApprove.mockRejectedValue(new ApiError("server error", 500));
 
 		const tree = renderButtons();
@@ -355,7 +352,7 @@ describe("ActionButtons", () => {
 
 	it("drops the row when the 409 recovery refetch also fails", async () => {
 		const approval = approvalFixture();
-		useApprovalsStore.setState({ items: [approval] });
+		setItems([approval]);
 		mockApprove.mockRejectedValue(new ApiError("conflict", 409));
 		mockListPending.mockRejectedValue(new Error("network down"));
 
@@ -371,7 +368,7 @@ describe("ActionButtons", () => {
 
 	it("clears the error and the busy state on a successful retry", async () => {
 		const approval = approvalFixture();
-		useApprovalsStore.setState({ items: [approval] });
+		setItems([approval]);
 		mockApprove.mockRejectedValueOnce(new Error("network down"));
 		mockApprove.mockResolvedValue(decidedFixture(approval));
 
@@ -400,7 +397,7 @@ describe("ActionButtons", () => {
 			id: "other",
 			action: { tool_name: "write", description: "Write release notes" },
 		});
-		useApprovalsStore.setState({ items: [confirming, other] });
+		setItems([confirming, other]);
 		mockApprove.mockResolvedValue(decidedFixture(confirming));
 
 		const tree = renderButtons();
@@ -437,7 +434,7 @@ describe("ActionButtons", () => {
 			impactAsync: jest.Mock;
 		};
 		impactAsync.mockRejectedValueOnce(new Error("haptics down"));
-		useApprovalsStore.setState({ items: [approvalFixture()] });
+		setItems([approvalFixture()]);
 
 		const tree = renderButtons();
 		const [dismiss] = dismissButtons(tree.root);
