@@ -1,4 +1,5 @@
 import type { MessagePart as StreamingPart } from "../../lib/streaming";
+import type { AttachedFile } from "./FileAttachment";
 
 export type ToolPartState =
 	| "pending"
@@ -70,6 +71,9 @@ export type Message = {
 	sources?: AgentSource[];
 	modelUsed?: string;
 	route?: string;
+	// Files attached to this message in the composer. They travel with the
+	// ask request per the AskAttachment contract (src/api/attachments.ts).
+	attachments?: AttachedFile[];
 };
 
 /**

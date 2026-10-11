@@ -7,6 +7,7 @@ export type { ContextUsage } from "./ContextUsageDisplay";
 export { ContextUsageDisplay } from "./ContextUsageDisplay";
 export type { AttachedFile } from "./FileAttachment";
 export { MessageActionsMenu } from "./MessageActionsMenu";
+export { MessageAttachments } from "./MessageAttachments";
 export { MessageList } from "./MessageList";
 export { ModelPicker } from "./ModelPicker";
 export type { Permission, PermissionResponse } from "./permission";

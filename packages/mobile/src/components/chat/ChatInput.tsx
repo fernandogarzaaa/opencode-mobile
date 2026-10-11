@@ -82,8 +82,9 @@ interface ChatInputProps {
 	/** Whether a session is currently active (for placeholder text) */
 	hasActiveSession?: boolean;
 	/**
-	 * Hide the file-attachment button. The Shadow Node's ask endpoint takes
-	 * text only, so there is nowhere to send attachments.
+	 * Hide the file-attachment button. The ask endpoint now accepts
+	 * attachments (see AskAttachment in src/api/attachments.ts); this flag
+	 * remains for screens that want a text-only composer.
 	 */
 	hideAttachments?: boolean;
 	/**
@@ -183,7 +184,6 @@ function FileIcon({ extension }: { extension?: string }) {
 }
 
 function AutocompleteOverlay({
-	type: _type,
 	items,
 	onSelect,
 }: {

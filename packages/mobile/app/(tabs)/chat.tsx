@@ -9,11 +9,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { agentApi } from "../../src/api/agent";
+import type { AttachedFile } from "../../src/components/chat/FileAttachment";
 import type { Message } from "../../src/components/chat";
 import {
 	ChatInput,
 	MessageList,
 } from "../../src/components/chat";
+import { askAttachmentOptions, canSendChatMessage } from "../../src/components/chat/chatSend";
 import { WorkingPlaceholder } from "../../src/components/chat/WorkingPlaceholder";
 import { useConnectionStore } from "../../src/stores/useConnectionStore";
 import { useTheme } from "../../src/theme";
@@ -111,18 +113,20 @@ export default function ChatScreen() {
 	);
 
 	const handleSend = useCallback(
-		(content: string) => {
+		(content: string, attachedFiles?: AttachedFile[]) => {
 			if (!isConnected || isLoading) return;
-			const text = content.trim();
-			if (!text) return;
+			if (!canSendChatMessage(content, attachedFiles)) return;
 
 			setIsLoading(true);
 
+			const text = content.trim();
+			const files = attachedFiles && attachedFiles.length > 0 ? attachedFiles : undefined;
 			const userMessage: Message = {
 				id: `user-${Date.now()}`,
 				role: "user",
 				content: text,
 				createdAt: Date.now(),
+				...(files ? { attachments: files } : {}),
 			};
 			const assistantId = `assistant-${Date.now()}`;
 			assistantIdRef.current = assistantId;
@@ -141,8 +145,10 @@ export default function ChatScreen() {
 
 			armWatchdog(assistantId);
 
-			cancelRef.current = agentApi.askStream(text, {
-				onDelta: (delta) => {
+			cancelRef.current = agentApi.askStream(
+				text,
+				{
+					onDelta: (delta) => {
 					armWatchdog(assistantId);
 					setMessages((prev) =>
 						prev.map((msg) =>
@@ -180,7 +186,9 @@ export default function ChatScreen() {
 					setIsLoading(false);
 					failAssistantMessage(assistantId, error.message);
 				},
-			});
+				},
+				askAttachmentOptions(files),
+			);
 		},
 		[isConnected, isLoading, armWatchdog, clearWatchdog, failAssistantMessage],
 	);
@@ -275,7 +283,6 @@ export default function ChatScreen() {
 						placeholder={
 							isConnected ? "Ask Shadow anything..." : "Connect to server first"
 						}
-						hideAttachments
 						hideModelSelector
 					/>
 				</View>
