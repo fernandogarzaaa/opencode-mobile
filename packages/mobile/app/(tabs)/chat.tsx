@@ -13,6 +13,7 @@ import type { Message } from "../../src/components/chat";
 import {
 	ChatInput,
 	MessageList,
+	ActionButtons,
 } from "../../src/components/chat";
 import { WorkingPlaceholder } from "../../src/components/chat/WorkingPlaceholder";
 import { useConnectionStore } from "../../src/stores/useConnectionStore";
@@ -268,6 +269,7 @@ export default function ChatScreen() {
 						},
 					]}
 				>
+					<ActionButtons />
 					<ChatInput
 						onSend={handleSend}
 						onStop={handleStop}
