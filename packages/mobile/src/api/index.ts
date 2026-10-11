@@ -53,3 +53,18 @@ export type { AgentSource, AskStreamDone, AskStreamHandlers } from "./agent";
 export { agentApi, askAgentStream } from "./agent";
 export type { Skill, SkillConfig } from "./skills";
 export { skillsApi, isSkillBuiltIn, isSkillHidden } from "./skills";
+export type {
+	ScheduledTask,
+	ScheduledTaskCreate,
+	ScheduledTaskUpdate,
+	ScheduleProposal,
+	ScheduleParseResult,
+	ScheduleParseStatus,
+	ScheduleRecurrence,
+} from "./scheduledTasks";
+export {
+	scheduledTasksApi,
+	isAmbientTaskId,
+	isReminderTask,
+	SCHEDULE_RECURRENCES,
+} from "./scheduledTasks";

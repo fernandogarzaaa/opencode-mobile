@@ -1,16 +1,40 @@
 import * as Linking from "expo-linking";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { Alert } from "react-native";
 import {
 	SettingsGroup,
 	SettingsRow,
 	SettingsScreen,
 } from "@/components/settings";
+import { scheduledTasksApi } from "@/api/scheduledTasks";
+import { countEnabledTasks } from "@/lib/scheduleFormat";
 import { useConnectionStore } from "@/stores/useConnectionStore";
 import packageJson from "../../package.json";
 
 export default function SettingsIndexScreen() {
-	const { disconnect } = useConnectionStore();
+	const { disconnect, isConnected } = useConnectionStore();
+	const [scheduledTaskCount, setScheduledTaskCount] = useState<number>(0);
+
+	// Count badge for the Scheduled Tasks row: number of enabled tasks.
+	// Silently stays 0 when the node predates the /scheduled-tasks API.
+	useFocusEffect(
+		useCallback(() => {
+			if (!isConnected) return;
+			let cancelled = false;
+			scheduledTasksApi
+				.list()
+				.then((tasks) => {
+					if (!cancelled) setScheduledTaskCount(countEnabledTasks(tasks));
+				})
+				.catch(() => {
+					if (!cancelled) setScheduledTaskCount(0);
+				});
+			return () => {
+				cancelled = true;
+			};
+		}, [isConnected]),
+	);
 
 	const handleDisconnect = () => {
 		Alert.alert(
@@ -64,6 +88,11 @@ export default function SettingsIndexScreen() {
 				<SettingsRow
 					title="Appearance"
 					onPress={() => router.push("/settings/appearance")}
+				/>
+				<SettingsRow
+					title="Scheduled Tasks"
+					badge={scheduledTaskCount}
+					onPress={() => router.push("/settings/scheduled-tasks")}
 				/>
 				<SettingsRow
 					title="Preferences"

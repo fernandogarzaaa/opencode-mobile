@@ -22,6 +22,7 @@ export default function SettingsLayout() {
 			<Stack.Screen name="commands" />
 			<Stack.Screen name="providers" />
 			<Stack.Screen name="git" />
+			<Stack.Screen name="scheduled-tasks" />
 		</Stack>
 	);
 }
