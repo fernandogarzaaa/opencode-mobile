@@ -64,6 +64,9 @@ export default function ChatScreen() {
 		text: string;
 	} | null>(null);
 	const [isConfirmingProposal, setIsConfirmingProposal] = useState(false);
+	// In-flight POST /reminders/parse: the user message is not shown until the
+	// parse resolves, so block re-sends and show the composer as busy.
+	const [isParsingSchedule, setIsParsingSchedule] = useState(false);
 
 	const cancelRef = useRef<(() => void) | null>(null);
 	const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -200,6 +203,7 @@ export default function ChatScreen() {
 	 */
 	const handleScheduleIntercept = useCallback(
 		async (text: string) => {
+			setIsParsingSchedule(true);
 			try {
 				const result = await scheduledTasksApi.parse(text);
 				if (result.status === "parsed" && result.proposal) {
@@ -228,6 +232,8 @@ export default function ChatScreen() {
 				}
 			} catch {
 				// Node predates /reminders/parse or is unreachable: fall through.
+			} finally {
+				setIsParsingSchedule(false);
 			}
 			sendToAgent(text);
 		},
@@ -284,7 +290,7 @@ export default function ChatScreen() {
 
 	const handleSend = useCallback(
 		(content: string) => {
-			if (!isConnected || isLoading) return;
+			if (!isConnected || isLoading || isParsingSchedule) return;
 			const text = content.trim();
 			if (!text) return;
 
@@ -299,7 +305,7 @@ export default function ChatScreen() {
 			}
 			sendToAgent(text);
 		},
-		[isConnected, isLoading, handleScheduleIntercept, sendToAgent],
+		[isConnected, isLoading, isParsingSchedule, handleScheduleIntercept, sendToAgent],
 	);
 
 	const handleStop = useCallback(() => {
@@ -396,7 +402,7 @@ export default function ChatScreen() {
 					<ChatInput
 						onSend={handleSend}
 						onStop={handleStop}
-						isLoading={isLoading}
+						isLoading={isLoading || isParsingSchedule}
 						placeholder={
 							isConnected ? "Ask Shadow anything..." : "Connect to server first"
 						}

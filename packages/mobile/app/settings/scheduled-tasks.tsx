@@ -21,6 +21,7 @@ import {
 	scheduledTasksApi,
 	type ScheduledTask,
 } from "@/api/scheduledTasks";
+import { ApiError } from "@/lib/httpClient";
 import { typography, useTheme } from "@/theme";
 
 /**
@@ -48,12 +49,13 @@ export default function ScheduledTasksScreen() {
 			const list = await scheduledTasksApi.list();
 			setTasks(list);
 		} catch (e) {
-			const message = e instanceof Error ? e.message : "Could not load tasks.";
 			// The node half (SHADOW-AI#85) may not be merged/deployed yet.
 			// A 404 on /scheduled-tasks means the node predates the route.
-			if (/404/.test(message)) {
+			if (e instanceof ApiError && e.status === 404) {
 				setNodeMissingRoutes(true);
 			} else {
+				const message =
+					e instanceof Error ? e.message : "Could not load tasks.";
 				setLoadError(message);
 			}
 		} finally {
