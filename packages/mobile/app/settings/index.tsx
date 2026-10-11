@@ -62,6 +62,10 @@ export default function SettingsIndexScreen() {
 					onPress={() => router.push("/settings/git")}
 				/>
 				<SettingsRow
+					title="Panels"
+					onPress={() => router.push("/settings/panels")}
+				/>
+				<SettingsRow
 					title="Appearance"
 					onPress={() => router.push("/settings/appearance")}
 				/>
