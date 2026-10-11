@@ -141,15 +141,28 @@ function pressables(root: ReactTestInstance) {
 }
 
 function approveButtons(root: ReactTestInstance) {
-	return pressables(root).filter((n) =>
-		String(n.props.accessibilityLabel ?? "").startsWith("Approve:"),
-	);
+	return pressables(root).filter((n) => {
+		const label = String(n.props.accessibilityLabel ?? "");
+		return (
+			label.startsWith("Approve:") || label.startsWith("Confirm approval:")
+		);
+	});
 }
 
 function dismissButtons(root: ReactTestInstance) {
 	return pressables(root).filter((n) =>
 		String(n.props.accessibilityLabel ?? "").startsWith("Dismiss:"),
 	);
+}
+
+function textContents(root: ReactTestInstance): string[] {
+	return root
+		.findAllByType("Text" as never)
+		.map((n) =>
+			Array.isArray(n.props.children)
+				? (n.props.children as unknown[]).join("")
+				: String(n.props.children ?? ""),
+		);
 }
 
 function setItems(items: ApprovalRequest[]) {
@@ -443,5 +456,150 @@ describe("ActionButtons", () => {
 		});
 
 		expect(approveButtons(tree.root)).toHaveLength(0);
+	});
+
+	it("colors the risk dot by risk tier", () => {
+		setItems([
+			approvalFixture({
+				id: "high",
+				action: { tool_name: "shell", description: "rm -rf /" },
+				risk_label: "high",
+			}),
+			approvalFixture({
+				id: "medium",
+				action: { tool_name: "shell", description: "Run tests" },
+				risk_label: "medium",
+			}),
+			approvalFixture({ id: "low", risk_label: "low" }),
+		]);
+		const tree = renderButtons();
+		const dots = tree.root
+			.findAllByType("View" as never)
+			.filter(
+				(n) =>
+					n.props.style &&
+					typeof n.props.style === "object" &&
+					(n.props.style as { width?: number }).width === 8,
+			)
+			.map((n) => (n.props.style as { backgroundColor: string }).backgroundColor);
+		expect(dots).toEqual(["#ff0000", "#ffaa00", "#00ff00"]);
+	});
+
+	it("shows the button as busy while an approval is in flight", async () => {
+		const approval = approvalFixture();
+		setItems([approval]);
+		let resolveApprove!: (v: ApprovalRequest) => void;
+		mockApprove.mockImplementation(
+			() =>
+				new Promise<ApprovalRequest>((res) => {
+					resolveApprove = res;
+				}),
+		);
+
+		const tree = renderButtons();
+		const [button] = approveButtons(tree.root);
+		let pending: Promise<void>;
+		act(() => {
+			pending = (button.props.onPress as () => Promise<void>)();
+		});
+		// While the request is in flight the button is disabled and dimmed.
+		const [busyButton] = approveButtons(tree.root);
+		expect(busyButton.props.disabled).toBe(true);
+		expect(
+			(busyButton.parent as { props: { style: { opacity: number } } })
+				.props.style.opacity,
+		).toBe(0.6);
+
+		resolveApprove(decidedFixture(approval));
+		await act(async () => {
+			await pending;
+		});
+	});
+
+	it("re-enables the button after a failed approval", async () => {
+		const approval = approvalFixture();
+		setItems([approval]);
+		mockApprove.mockRejectedValue(new Error("network down"));
+
+		const tree = renderButtons();
+		const [button] = approveButtons(tree.root);
+		await act(async () => {
+			await (button.props.onPress as () => Promise<void>)();
+		});
+
+		const [retryButton] = approveButtons(tree.root);
+		expect(retryButton.props.disabled).toBe(false);
+	});
+
+	it("clears another row's error when a new approval starts", async () => {
+		const failed = approvalFixture({ id: "failed" });
+		const other = approvalFixture({ id: "other" });
+		setItems([failed, other]);
+		mockApprove.mockRejectedValueOnce(new Error("network down"));
+		mockApprove.mockResolvedValue(decidedFixture(other));
+
+		const tree = renderButtons();
+		const [failedButton] = approveButtons(tree.root).filter((n) =>
+			String(n.props.accessibilityLabel).includes("Write release notes"),
+		);
+		await act(async () => {
+			await (failedButton.props.onPress as () => Promise<void>)();
+		});
+		// One error is shown.
+		let texts = textContents(tree.root);
+		expect(texts.filter((t) => t.includes("Approval failed"))).toHaveLength(1);
+
+		// Approving the other row clears the first row's error.
+		const [, otherButton] = approveButtons(tree.root);
+		await act(async () => {
+			await (otherButton.props.onPress as () => Promise<void>)();
+		});
+		texts = textContents(tree.root);
+		expect(texts.filter((t) => t.includes("Approval failed"))).toHaveLength(0);
+	});
+
+	it("resets dismissals when the pending set changes", async () => {
+		const approval = approvalFixture({ id: "a1" });
+		setItems([approval]);
+
+		const tree = renderButtons();
+		const [dismiss] = dismissButtons(tree.root);
+		act(() => {
+			(dismiss.props.onPress as () => void)();
+		});
+		expect(approveButtons(tree.root)).toHaveLength(0);
+
+		// A new approval arrives: the dismissed one comes back.
+		setItems([approval, approvalFixture({ id: "a2" })]);
+		expect(approveButtons(tree.root)).toHaveLength(2);
+	});
+
+	it("clears a pending confirmation when the pending set changes", async () => {
+		const confirming = approvalFixture({
+			id: "confirm-me",
+			action: { tool_name: "delete", description: "Delete production DB" },
+			requires_double_confirmation: true,
+		});
+		setItems([confirming]);
+		mockApprove.mockResolvedValue(decidedFixture(confirming));
+
+		const tree = renderButtons();
+		const [button] = approveButtons(tree.root);
+		await act(async () => {
+			await (button.props.onPress as () => Promise<void>)();
+		});
+		// Confirmation is armed.
+		expect(
+			approveButtons(tree.root)[0].props.accessibilityLabel,
+		).toContain("Confirm approval:");
+
+		// The set changes: the armed confirmation clears.
+		setItems([confirming, approvalFixture({ id: "new" })]);
+		expect(
+			approveButtons(tree.root)[0].props.accessibilityLabel,
+		).toContain("Approve:");
+		expect(
+			approveButtons(tree.root)[0].props.accessibilityLabel,
+		).not.toContain("Confirm approval:");
 	});
 });
