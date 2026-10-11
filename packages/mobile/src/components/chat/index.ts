@@ -12,6 +12,8 @@ export { ModelPicker } from "./ModelPicker";
 export type { Permission, PermissionResponse } from "./permission";
 export { PermissionCard } from "./permission";
 export { StatusRow } from "./StatusRow";
+export { BackgroundTaskPills } from "./BackgroundTaskPills";
+export { pillLabelFor } from "./backgroundTaskPillLabel";
 export { TimelineSheet } from "./TimelineSheet";
 export type { Message, MessagePart, TokenBreakdown, AgentSource } from "./types";
 export { convertStreamingPart } from "./types";

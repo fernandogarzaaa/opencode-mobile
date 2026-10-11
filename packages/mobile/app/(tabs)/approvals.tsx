@@ -16,7 +16,6 @@ import {
 import { ApprovalCard } from "@/components/approvals/ApprovalCard";
 import { RefreshIcon } from "@/components/icons";
 import { Button, IconButton, SkeletonCard } from "@/components/ui";
-import { useApprovalStream } from "@/hooks/useApprovalStream";
 import { ApiError } from "@/lib/httpClient";
 import { useApprovalsStore } from "@/stores/useApprovalsStore";
 import { useConnectionStore } from "@/stores/useConnectionStore";
@@ -37,7 +36,6 @@ export default function ApprovalsScreen() {
 	const { isConnected } = useConnectionStore();
 	const items = useApprovalsStore((s) => s.items);
 	const setItems = useApprovalsStore((s) => s.setItems);
-	const upsert = useApprovalsStore((s) => s.upsert);
 	const removeItem = useApprovalsStore((s) => s.remove);
 
 	const [loading, setLoading] = useState(true);
@@ -130,17 +128,9 @@ export default function ApprovalsScreen() {
 		return () => subscription.remove();
 	}, [fetchPending]);
 
-	// Live updates from the node event bus.
-	useApprovalStream({
-		onCreated: useCallback(
-			(approval: ApprovalRequest) => upsert(approval),
-			[upsert],
-		),
-		onUpdated: useCallback(
-			(approval: ApprovalRequest) => upsert(approval),
-			[upsert],
-		),
-	});
+	// Live updates from the node event bus are subscribed once in the
+	// tabs layout (app/(tabs)/_layout.tsx) so every tab, including the
+	// chat tab's background-task pills, sees them.
 
 	/**
 	 * 409 recovery: the decision landed but the response was lost. Recover

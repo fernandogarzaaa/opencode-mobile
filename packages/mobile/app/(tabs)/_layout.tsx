@@ -12,6 +12,7 @@ import {
 	SessionSheetContext,
 } from "../../src/contexts/tabs-context";
 import { useEdgeSwipe } from "../../src/hooks/useEdgeSwipe";
+import { useApprovalStream } from "../../src/hooks/useApprovalStream";
 import type { CachedSession } from "../../src/lib/offlineCache";
 import {
 	fetchSessionsWithCache,
@@ -19,6 +20,7 @@ import {
 	initializeSessionSync,
 } from "../../src/lib/sessionSync";
 import { onApprovalNotificationTap } from "../../src/lib/approvalNotifications";
+import type { ApprovalRequest } from "../../src/api/approvals";
 import { useConnectionStore } from "../../src/stores/useConnectionStore";
 import { useApprovalsStore } from "../../src/stores/useApprovalsStore";
 import { useTheme } from "../../src/theme";
@@ -36,6 +38,22 @@ export default function TabsLayout() {
 	const [activeTab, setActiveTab] = useState<MainTab>("approvals");
 	const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
 	const approvalCount = useApprovalsStore((s) => s.items.length);
+	const upsertApproval = useApprovalsStore((s) => s.upsert);
+
+	// Live approval updates for the whole tab area (moved up from the
+	// approvals screen): the chat tab's background-task pills and the
+	// header badge both read useApprovalsStore, so the SSE subscription
+	// must stay alive whichever tab is visible. Exactly one subscriber.
+	useApprovalStream({
+		onCreated: useCallback(
+			(approval: ApprovalRequest) => upsertApproval(approval),
+			[upsertApproval],
+		),
+		onUpdated: useCallback(
+			(approval: ApprovalRequest) => upsertApproval(approval),
+			[upsertApproval],
+		),
+	});
 
 	// Session management state (shared across all tabs)
 	const [sessions, setSessions] = useState<Session[]>([]);
