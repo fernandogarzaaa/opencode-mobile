@@ -387,6 +387,16 @@ function emitApprovalNotificationTap(approvalId: string | null): void {
 }
 
 /**
+ * Request the approvals inbox from inside the app (for example, tapping a
+ * background-task pill in chat). Reuses the notification-tap listener set;
+ * TabsLayout switches the visible tab to the approvals inbox, which is the
+ * task's detail surface.
+ */
+export function openApprovalsInbox(approvalId: string | null): void {
+	emitApprovalNotificationTap(approvalId);
+}
+
+/**
  * Install the foreground notification handler (show banner + list entry +
  * sound + badge, mirroring lock-screen behavior) and the tap-response
  * listener. Creates the Android "approvals" channel (high importance);
