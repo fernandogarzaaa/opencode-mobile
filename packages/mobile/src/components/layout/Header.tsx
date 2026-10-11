@@ -77,7 +77,9 @@ export function Header({
 		<View
 			className={headerStyles.container({})}
 			style={{
-				backgroundColor: colors.background,
+				// Transparent so the ambient time-of-day gradient behind the
+				// tabs shows through (backlog item 8).
+				backgroundColor: "transparent",
 				borderBottomColor: colors.border,
 				borderBottomWidth: 1,
 				paddingTop: insets.top,
