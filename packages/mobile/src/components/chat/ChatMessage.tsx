@@ -9,6 +9,8 @@ import { ReasoningPart, ToolPart } from "./parts";
 import { CopyIcon, UndoIcon, GitBranchIcon, CheckIcon } from "../icons";
 import { ProviderLogo } from "../ui/ProviderLogo";
 import { type Message, type MessagePart, type AgentSource, inferProviderIdFromModelName } from "./types";
+import { MessageAttachments } from "./MessageAttachments";
+import type { AttachedFile } from "./FileAttachment";
 
 /**
  * Retrieval citations from the node's ask pipeline (agent.message.done).
@@ -222,11 +224,13 @@ function MessageActionButton({
 function UserMessage({
 	content,
 	messageId,
+	attachments,
 	onRevert,
 	onFork,
 }: {
 	content: string;
 	messageId: string;
+	attachments?: AttachedFile[];
 	onRevert?: (messageId: string) => void;
 	onFork?: (messageId: string) => void;
 }) {
@@ -287,9 +291,12 @@ function UserMessage({
 						borderBottomRightRadius: Radius.sm,
 					}}
 				>
-					<Text style={[typography.body, { color: colors.foreground }]}>
-						{content}
-					</Text>
+					<MessageAttachments attachments={attachments} />
+					{content.length > 0 && (
+						<Text style={[typography.body, { color: colors.foreground }]}>
+							{content}
+						</Text>
+					)}
 				</View>
 			</Pressable>
 			{/* Inline action icons - only shown when message is pressed */}
@@ -630,6 +637,7 @@ export function ChatMessage({
 			<UserMessage
 				content={message.content}
 				messageId={message.id}
+				attachments={message.attachments}
 				onRevert={onRevert}
 				onFork={onBranchSession}
 			/>

@@ -1,12 +1,14 @@
 import { buildShadowHeaders } from "../lib/shadowAuth";
 import { getConnectionState } from "../stores/useConnectionStore";
+import type { AskAttachment } from "./attachments";
 
 /**
  * Shadow Node agent API.
  *
  * Server contract (apps/shadow-node/shadow_node/main.py):
  *   POST /agent/ask_stream {prompt: string, allow_cloud?: bool,
- *     cloud_approval?: bool, session_id?: string|null}
+ *     cloud_approval?: bool, session_id?: string|null,
+ *     attachments?: AskAttachment[]}
  * returns SSE frames:
  *   data: {"type":"agent.message.delta","properties":{"sessionID","messageID","delta"}}
  *   ... then ...
@@ -77,12 +79,23 @@ interface SseFrame {
 }
 
 /**
- * POST /agent/ask_stream with {prompt} and stream the SSE answer.
+ * Optional per-ask settings. Attachments travel with the ask request body;
+ * see AskAttachment in ./attachments.ts for the wire contract. The node
+ * ignores unknown fields until its media handling lands (follow-up item).
+ */
+export interface AskStreamOptions {
+	attachments?: AskAttachment[];
+}
+
+/**
+ * POST /agent/ask_stream with {prompt} (plus {attachments} when provided)
+ * and stream the SSE answer.
  * Returns a cancel function (aborts the XHR; no further callbacks fire).
  */
 export function askAgentStream(
 	prompt: string,
 	handlers: AskStreamHandlers,
+	options?: AskStreamOptions,
 ): () => void {
 	const { serverUrl, deviceId, deviceSecret } = getConnectionState();
 	if (!serverUrl || !deviceId || !deviceSecret) {
@@ -92,7 +105,11 @@ export function askAgentStream(
 
 	const path = "/agent/ask_stream";
 	const url = `${normalizeServerUrl(serverUrl)}${path}`;
-	const body = JSON.stringify({ prompt });
+	const body = JSON.stringify(
+		options?.attachments && options.attachments.length > 0
+			? { prompt, attachments: options.attachments }
+			: { prompt },
+	);
 
 	const xhr = new XMLHttpRequest();
 	let settled = false;
