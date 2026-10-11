@@ -1,0 +1,19 @@
+{
+  "$schema": "https://stryker-mutator.io/assets/stryker-schema.json",
+  "coverageAnalysis": "all",
+  "packageManager": "npm",
+  "reporters": [
+    "json",
+    "clear-text"
+  ],
+  "testRunner": "command",
+  "thresholds": {
+    "break": null,
+    "high": 80,
+    "low": 60
+  },
+  "tsconfigFileName": "tsconfig.json",
+  "commandRunner": {
+    "command": "npm test --silent"
+  }
+}
