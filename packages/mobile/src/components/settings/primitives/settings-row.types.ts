@@ -8,6 +8,11 @@ interface SettingsRowBaseProps {
   title: string;
   /** Value text (displayed on the right, before chevron) */
   value?: string;
+  /**
+   * Count badge (displayed on the right, before value/chevron).
+   * Used for menu rows that lead to a countable list, e.g. scheduled tasks.
+   */
+  badge?: number;
   /** Whether this is a destructive action */
   destructive?: boolean;
   /** Additional className */

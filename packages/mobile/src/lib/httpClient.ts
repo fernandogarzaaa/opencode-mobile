@@ -5,8 +5,10 @@ const DEFAULT_TIMEOUT_MS = 15000;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 500;
 
-// Debug logging - set to true to see API requests/responses
-const DEBUG_HTTP = __DEV__;
+// Debug logging - set to true to see API requests/responses.
+// __DEV__ is a Metro bundler global; guard it so this module also imports
+// cleanly outside Metro (e.g. under jest in a node environment).
+const DEBUG_HTTP = typeof __DEV__ !== "undefined" && __DEV__;
 
 function debugLog(message: string, data?: unknown) {
 	if (DEBUG_HTTP) {

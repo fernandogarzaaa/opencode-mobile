@@ -9,11 +9,17 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { agentApi } from "../../src/api/agent";
+import {
+	scheduledTasksApi,
+	type ScheduleProposal,
+} from "../../src/api/scheduledTasks";
+import { looksLikeScheduleRequest } from "../../src/lib/scheduleFormat";
 import type { Message } from "../../src/components/chat";
 import {
 	ChatInput,
 	MessageList,
 } from "../../src/components/chat";
+import { ScheduleProposalCard } from "../../src/components/tasks";
 import { WorkingPlaceholder } from "../../src/components/chat/WorkingPlaceholder";
 import { useConnectionStore } from "../../src/stores/useConnectionStore";
 import { useTheme } from "../../src/theme";
@@ -51,6 +57,13 @@ export default function ChatScreen() {
 	const [visibleMessageCount, setVisibleMessageCount] = useState(
 		DEFAULT_VISIBLE_MESSAGES,
 	);
+	// Pending schedule proposal from POST /reminders/parse (Hark item 4).
+	// The card renders above the composer; nothing is created until Confirm.
+	const [pendingProposal, setPendingProposal] = useState<{
+		proposal: ScheduleProposal;
+		text: string;
+	} | null>(null);
+	const [isConfirmingProposal, setIsConfirmingProposal] = useState(false);
 
 	const cancelRef = useRef<(() => void) | null>(null);
 	const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -110,13 +123,8 @@ export default function ChatScreen() {
 		[clearWatchdog, failAssistantMessage],
 	);
 
-	const handleSend = useCallback(
-		(content: string) => {
-			if (!isConnected || isLoading) return;
-			const text = content.trim();
-			if (!text) return;
-
-			setIsLoading(true);
+	const sendToAgent = useCallback(
+		(text: string) => {
 
 			const userMessage: Message = {
 				id: `user-${Date.now()}`,
@@ -182,7 +190,116 @@ export default function ChatScreen() {
 				},
 			});
 		},
-		[isConnected, isLoading, armWatchdog, clearWatchdog, failAssistantMessage],
+		[armWatchdog, clearWatchdog, failAssistantMessage],
+	);
+
+	/**
+	 * Route a scheduling-looking message through the node's deterministic
+	 * parser. Falls through to the agent when the parser rejects it or the
+	 * node predates the route, so chat never dead-ends on old nodes.
+	 */
+	const handleScheduleIntercept = useCallback(
+		async (text: string) => {
+			try {
+				const result = await scheduledTasksApi.parse(text);
+				if (result.status === "parsed" && result.proposal) {
+					setPendingProposal({ proposal: result.proposal, text });
+					return;
+				}
+				if (result.status === "needs_clarification" && result.question) {
+					const question = result.question;
+					const now = Date.now();
+					setMessages((prev) => [
+						...prev,
+						{
+							id: `user-${now}`,
+							role: "user",
+							content: text,
+							createdAt: now,
+						},
+						{
+							id: `assistant-${now}`,
+							role: "assistant",
+							content: question,
+							createdAt: now,
+						},
+					]);
+					return;
+				}
+			} catch {
+				// Node predates /reminders/parse or is unreachable: fall through.
+			}
+			sendToAgent(text);
+		},
+		[sendToAgent],
+	);
+
+	const handleConfirmProposal = useCallback(async () => {
+		if (!pendingProposal || isConfirmingProposal) return;
+		setIsConfirmingProposal(true);
+		try {
+			const created = await scheduledTasksApi.create({
+				title: pendingProposal.proposal.title,
+				note: pendingProposal.proposal.note,
+				due_at: pendingProposal.proposal.due_at,
+				recurrence: pendingProposal.proposal.recurrence,
+			});
+			const now = Date.now();
+			setMessages((prev) => [
+				...prev,
+				{
+					id: `user-${now}`,
+					role: "user",
+					content: pendingProposal.text,
+					createdAt: now,
+				},
+				{
+					id: `assistant-${now}`,
+					role: "assistant",
+					content: `Scheduled: ${created.title} (${created.cadence}).`,
+					createdAt: now,
+				},
+			]);
+			setPendingProposal(null);
+		} catch (e) {
+			const now = Date.now();
+			setMessages((prev) => [
+				...prev,
+				{
+					id: `assistant-${now}`,
+					role: "assistant",
+					content: `Could not schedule that: ${e instanceof Error ? e.message : "unknown error"}. The proposal is still above; you can retry.`,
+					createdAt: now,
+				},
+			]);
+		} finally {
+			setIsConfirmingProposal(false);
+		}
+	}, [pendingProposal, isConfirmingProposal]);
+
+	const handleCancelProposal = useCallback(() => {
+		setPendingProposal(null);
+	}, []);
+
+
+	const handleSend = useCallback(
+		(content: string) => {
+			if (!isConnected || isLoading) return;
+			const text = content.trim();
+			if (!text) return;
+
+			// Scheduling-request intercept (Hark item 4): "remind me ..." goes
+			// to POST /reminders/parse first. A parsed proposal gets a confirm
+			// card above the composer; a clarifying question lands as an
+			// assistant message. Anything else (or a node without the route)
+			// falls through to the agent untouched.
+			if (looksLikeScheduleRequest(text)) {
+				void handleScheduleIntercept(text);
+				return;
+			}
+			sendToAgent(text);
+		},
+		[isConnected, isLoading, handleScheduleIntercept, sendToAgent],
 	);
 
 	const handleStop = useCallback(() => {
@@ -268,6 +385,14 @@ export default function ChatScreen() {
 						},
 					]}
 				>
+					{pendingProposal && (
+						<ScheduleProposalCard
+							proposal={pendingProposal.proposal}
+							onConfirm={handleConfirmProposal}
+							onCancel={handleCancelProposal}
+							isConfirming={isConfirmingProposal}
+						/>
+					)}
 					<ChatInput
 						onSend={handleSend}
 						onStop={handleStop}
