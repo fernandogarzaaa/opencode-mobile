@@ -23,6 +23,7 @@ import { useConnectionStore } from "../../src/stores/useConnectionStore";
 import { useApprovalsStore } from "../../src/stores/useApprovalsStore";
 import { useTheme } from "../../src/theme";
 import { SetupGate } from "../../src/components/layout/SetupGate";
+import { AmbientBackground } from "../../src/components/layout/AmbientBackground";
 import ApprovalsScreen from "./approvals";
 import ChatScreen from "./chat";
 import FilesScreen from "./files";
@@ -292,21 +293,26 @@ export default function TabsLayout() {
 				<View
 					style={[styles.container, { backgroundColor: colors.background }]}
 				>
-					<Header
-						activeTab={activeTab}
-						onTabChange={handleTabChange}
-						onMenuPress={handleMenuPress}
-						onSettingsPress={handleSettingsPress}
-						onSessionsPress={openSessionSheet}
-						contextUsage={contextUsage}
-						approvalCount={approvalCount}
-					/>
-					{/* Setup gate (OpenDots backlog #9): block tab content until
-					    the device is paired and credentials are configured.
-					    Deep links can land here bypassing the index redirect. */}
-					<SetupGate>
-						<View style={styles.content}>{renderContent()}</View>
-					</SetupGate>
+					{/* Ambient time-of-day gradient (backlog item 8): one gradient
+					    behind the header and the active tab. Screens keep
+					    transparent roots so it shows through. */}
+					<AmbientBackground>
+						<Header
+							activeTab={activeTab}
+							onTabChange={handleTabChange}
+							onMenuPress={handleMenuPress}
+							onSettingsPress={handleSettingsPress}
+							onSessionsPress={openSessionSheet}
+							contextUsage={contextUsage}
+							approvalCount={approvalCount}
+						/>
+						{/* Setup gate (OpenDots backlog #9): block tab content until
+						    the device is paired and credentials are configured.
+						    Deep links can land here bypassing the index redirect. */}
+						<SetupGate>
+							<View style={styles.content}>{renderContent()}</View>
+						</SetupGate>
+					</AmbientBackground>
 
 					<SessionSheet
 						ref={sheetRef}
