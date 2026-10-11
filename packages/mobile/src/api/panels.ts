@@ -174,7 +174,9 @@ export const panelsApi = {
 
 	/** Render one custom panel as panel JSON (same shape as built-ins). */
 	async renderCustom(panelId: string): Promise<Panel> {
-		return apiGet<Panel>(`/custom-panels/${panelId}/render`);
+		return apiGet<Panel>(
+			`/custom-panels/${encodeURIComponent(panelId)}/render`,
+		);
 	},
 
 	/**
@@ -182,7 +184,9 @@ export const panelsApi = {
 	 * explicit confirm=true, so this client always sends it.
 	 */
 	async deleteCustom(panelId: string): Promise<void> {
-		await apiDelete<{ deleted: string }>(`/custom-panels/${panelId}`, {
+		await apiDelete<{ deleted: string }>(
+			`/custom-panels/${encodeURIComponent(panelId)}`,
+			{
 			confirm: true,
 		});
 		panelsCache.clear();

@@ -278,15 +278,14 @@ export default function ChatScreen() {
 				postExchange(text, "Here are your panels.");
 				setPanelViewer({ title: "Panels", panels });
 			} catch {
-				postExchange(
-					text,
-					"Could not load panels. The node may be unreachable or too old for the panels API.",
-				);
+				// Node predates /panels or is unreachable: fall through to
+				// the agent instead of dead-ending on a fixed error.
+				sendToAgent(text);
 			} finally {
 				setIsLoadingPanels(false);
 			}
 		},
-		[postExchange],
+		[postExchange, sendToAgent],
 	);
 
 	const handleConfirmPanelProposal = useCallback(async () => {
@@ -300,10 +299,22 @@ export default function ChatScreen() {
 				sort: pendingPanelProposal.proposal.sort,
 				limit: pendingPanelProposal.proposal.limit,
 			});
-			const rendered = await panelsApi.renderCustom(created.id);
-			postExchange(pendingPanelProposal.text, `Panel created: ${created.name}.`);
-			setPanelViewer({ title: created.name, panels: [rendered] });
+			// The panel exists from here on: clear the proposal first so a
+			// later failure cannot invite a duplicate-creating retry.
 			setPendingPanelProposal(null);
+			try {
+				const rendered = await panelsApi.renderCustom(created.id);
+				postExchange(
+					pendingPanelProposal.text,
+					`Panel created: ${created.name}.`,
+				);
+				setPanelViewer({ title: created.name, panels: [rendered] });
+			} catch {
+				postExchange(
+					pendingPanelProposal.text,
+					`Panel "${created.name}" was created but could not be shown. Open Panels in Settings to view it.`,
+				);
+			}
 		} catch (e) {
 			postExchange(
 				pendingPanelProposal.text,
@@ -324,7 +335,14 @@ export default function ChatScreen() {
 
 	const handleSend = useCallback(
 		(content: string) => {
-			if (!isConnected || isLoading || isParsingPanel) return;
+			if (
+				!isConnected ||
+				isLoading ||
+				isParsingPanel ||
+				isLoadingPanels ||
+				isConfirmingPanelProposal
+			)
+				return;
 			const text = content.trim();
 			if (!text) return;
 
@@ -348,6 +366,8 @@ export default function ChatScreen() {
 			isConnected,
 			isLoading,
 			isParsingPanel,
+			isLoadingPanels,
+			isConfirmingPanelProposal,
 			handlePanelCreateIntercept,
 			handlePanelViewIntercept,
 			sendToAgent,

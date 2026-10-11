@@ -124,6 +124,17 @@ describe("custom panel CRUD", () => {
 		expect(mockGet).toHaveBeenCalledWith("/custom-panels/cpanel_1/render");
 	});
 
+	it("URL-encodes panel ids with special characters", async () => {
+		mockGet.mockResolvedValue(panelFixture({ id: "a/b c" }));
+		await panelsApi.renderCustom("a/b c");
+		expect(mockGet).toHaveBeenCalledWith("/custom-panels/a%2Fb%20c/render");
+		mockDelete.mockResolvedValue({ deleted: "a/b c" });
+		await panelsApi.deleteCustom("a/b c");
+		expect(mockDelete).toHaveBeenCalledWith("/custom-panels/a%2Fb%20c", {
+			confirm: true,
+		});
+	});
+
 	it("deletes with explicit confirm=true and clears the cache", async () => {
 		mockDelete.mockResolvedValue({ deleted: "cpanel_1" });
 		mockGet.mockResolvedValue([panelFixture()]);

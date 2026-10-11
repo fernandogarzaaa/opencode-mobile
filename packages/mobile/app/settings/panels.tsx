@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
@@ -42,9 +42,15 @@ export default function PanelsScreen() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [isRefreshing, setIsRefreshing] = useState(false);
 	const [nodeMissing, setNodeMissing] = useState(false);
+	const [loadError, setLoadError] = useState<string | null>(null);
 	const [deletingId, setDeletingId] = useState<string | null>(null);
+	// Sequence counter: overlapping loads (mount, pull-to-refresh, post-delete
+	// reload) must not let a stale response overwrite newer state.
+	const requestSeq = useRef(0);
 
 	const loadPanels = useCallback(async (showRefresh: boolean) => {
+		const seq = ++requestSeq.current;
+		const isCurrent = () => requestSeq.current === seq;
 		if (showRefresh) {
 			setIsRefreshing(true);
 			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -52,13 +58,12 @@ export default function PanelsScreen() {
 			setIsLoading(true);
 		}
 		setNodeMissing(false);
+		setLoadError(null);
 		try {
 			const [builtIn, defs] = await Promise.all([
 				panelsApi.listPanels({ refresh: true }),
 				panelsApi.listCustom().catch(() => [] as CustomPanelDef[]),
 			]);
-			setPanels(builtIn);
-			setCustomDefs(defs);
 			const rendered: Record<string, Panel> = {};
 			await Promise.all(
 				defs.map(async (def) => {
@@ -69,14 +74,24 @@ export default function PanelsScreen() {
 					}
 				}),
 			);
+			if (!isCurrent()) return;
+			setPanels(builtIn);
+			setCustomDefs(defs);
 			setCustomRendered(rendered);
 		} catch (error) {
+			if (!isCurrent()) return;
 			if (error instanceof ApiError && error.status === 404) {
 				setNodeMissing(true);
+			} else {
+				setLoadError(
+					error instanceof Error ? error.message : "unknown error",
+				);
 			}
 		} finally {
-			setIsLoading(false);
-			setIsRefreshing(false);
+			if (isCurrent()) {
+				setIsLoading(false);
+				setIsRefreshing(false);
+			}
 		}
 	}, []);
 
@@ -160,6 +175,26 @@ export default function PanelsScreen() {
 						Your node does not have the panels API yet. Update the Shadow
 						Node to see glanceable panels here.
 					</Text>
+				</View>
+			) : loadError ? (
+				<View className="flex-1 items-center justify-center px-6">
+					<Text
+						style={[typography.uiLabel, { color: colors.mutedForeground }]}
+						className="text-center mb-3"
+					>
+						Could not load panels: {loadError}
+					</Text>
+					<Pressable
+						onPress={() => loadPanels(false)}
+						accessibilityLabel="Retry loading panels"
+						accessibilityRole="button"
+						className="px-4 py-2 rounded-xl"
+						style={{ backgroundColor: colors.primary }}
+					>
+						<Text style={{ color: colors.primaryForeground }}>
+							Try again
+						</Text>
+					</Pressable>
 				</View>
 			) : (
 				<ScrollView
