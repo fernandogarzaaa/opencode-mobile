@@ -310,4 +310,141 @@ describe("ActionButtons", () => {
 		// The button stays so the user can retry.
 		expect(approveButtons(tree.root)).toHaveLength(1);
 	});
+
+	it("blocks a second tap while an approval is in flight", async () => {
+		const approval = approvalFixture();
+		useApprovalsStore.setState({ items: [approval] });
+		let resolveApprove!: (v: ApprovalRequest) => void;
+		mockApprove.mockImplementation(
+			() =>
+				new Promise<ApprovalRequest>((res) => {
+					resolveApprove = res;
+				}),
+		);
+
+		const tree = renderButtons();
+		const [button] = approveButtons(tree.root);
+		let first: Promise<void>, second: Promise<void>;
+		act(() => {
+			first = (button.props.onPress as () => Promise<void>)();
+			second = (button.props.onPress as () => Promise<void>)();
+		});
+		resolveApprove(decidedFixture(approval));
+		await act(async () => {
+			await first;
+			await second;
+		});
+
+		expect(mockApprove).toHaveBeenCalledTimes(1);
+	});
+
+	it("shows an inline error for a non-409 API failure without refetching", async () => {
+		const approval = approvalFixture();
+		useApprovalsStore.setState({ items: [approval] });
+		mockApprove.mockRejectedValue(new ApiError("server error", 500));
+
+		const tree = renderButtons();
+		const [button] = approveButtons(tree.root);
+		await act(async () => {
+			await (button.props.onPress as () => Promise<void>)();
+		});
+
+		expect(mockListPending).not.toHaveBeenCalled();
+		expect(approveButtons(tree.root)).toHaveLength(1);
+	});
+
+	it("drops the row when the 409 recovery refetch also fails", async () => {
+		const approval = approvalFixture();
+		useApprovalsStore.setState({ items: [approval] });
+		mockApprove.mockRejectedValue(new ApiError("conflict", 409));
+		mockListPending.mockRejectedValue(new Error("network down"));
+
+		const tree = renderButtons();
+		const [button] = approveButtons(tree.root);
+		await act(async () => {
+			await (button.props.onPress as () => Promise<void>)();
+		});
+
+		expect(useApprovalsStore.getState().items).toHaveLength(0);
+		expect(approveButtons(tree.root)).toHaveLength(0);
+	});
+
+	it("clears the error and the busy state on a successful retry", async () => {
+		const approval = approvalFixture();
+		useApprovalsStore.setState({ items: [approval] });
+		mockApprove.mockRejectedValueOnce(new Error("network down"));
+		mockApprove.mockResolvedValue(decidedFixture(approval));
+
+		const tree = renderButtons();
+		let [button] = approveButtons(tree.root);
+		await act(async () => {
+			await (button.props.onPress as () => Promise<void>)();
+		});
+		// First attempt failed; the button is usable again.
+		[button] = approveButtons(tree.root);
+		await act(async () => {
+			await (button.props.onPress as () => Promise<void>)();
+		});
+
+		expect(mockApprove).toHaveBeenCalledTimes(2);
+		expect(approveButtons(tree.root)).toHaveLength(0);
+	});
+
+	it("keeps another item's confirm state when dismissing a row", async () => {
+		const confirming = approvalFixture({
+			id: "confirm-me",
+			action: { tool_name: "delete", description: "Delete production DB" },
+			requires_double_confirmation: true,
+		});
+		const other = approvalFixture({
+			id: "other",
+			action: { tool_name: "write", description: "Write release notes" },
+		});
+		useApprovalsStore.setState({ items: [confirming, other] });
+		mockApprove.mockResolvedValue(decidedFixture(confirming));
+
+		const tree = renderButtons();
+		const [confirmButton] = approveButtons(tree.root).filter((n) =>
+			String(n.props.accessibilityLabel).includes("Delete production DB"),
+		);
+		// Arm the double confirmation.
+		await act(async () => {
+			await (confirmButton.props.onPress as () => Promise<void>)();
+		});
+		// Dismiss the other row; the confirm state must survive.
+		const [dismissOther] = dismissButtons(tree.root).filter((n) =>
+			String(n.props.accessibilityLabel).includes("Write release notes"),
+		);
+		act(() => {
+			(dismissOther.props.onPress as () => void)();
+		});
+
+		const [stillConfirming] = pressables(tree.root).filter((n) =>
+			String(n.props.accessibilityLabel ?? "").startsWith(
+				"Confirm approval:",
+			),
+		);
+		expect(stillConfirming).toBeDefined();
+		await act(async () => {
+			await (stillConfirming.props.onPress as () => Promise<void>)();
+		});
+		expect(mockApprove).toHaveBeenCalledTimes(1);
+		expect(mockApprove).toHaveBeenCalledWith("confirm-me");
+	});
+
+	it("still dismisses when haptics fails", async () => {
+		const { impactAsync } = jest.requireMock("expo-haptics") as {
+			impactAsync: jest.Mock;
+		};
+		impactAsync.mockRejectedValueOnce(new Error("haptics down"));
+		useApprovalsStore.setState({ items: [approvalFixture()] });
+
+		const tree = renderButtons();
+		const [dismiss] = dismissButtons(tree.root);
+		await act(async () => {
+			await (dismiss.props.onPress as () => void)();
+		});
+
+		expect(approveButtons(tree.root)).toHaveLength(0);
+	});
 });

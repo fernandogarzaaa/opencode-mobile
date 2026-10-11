@@ -63,12 +63,27 @@ describe("actionLabelFor", () => {
 		expect(label.endsWith("...")).toBe(true);
 	});
 
+	it("trims a padded tool name when there is no description", () => {
+		const a = approvalFixture({
+			action: { tool_name: "  shell_exec  " },
+		});
+		expect(actionLabelFor(a)).toBe("shell_exec");
+	});
+
 	it("keeps labels at exactly the limit intact", () => {
 		const exact = "b".repeat(48);
 		const a = approvalFixture({
 			action: { tool_name: "x", description: exact },
 		});
 		expect(actionLabelFor(a)).toBe(exact);
+	});
+
+	it("truncates one char over the limit", () => {
+		const over = `c`.repeat(49);
+		const a = approvalFixture({
+			action: { tool_name: "x", description: over },
+		});
+		expect(actionLabelFor(a)).toBe(`${"c".repeat(45)}...`);
 	});
 });
 
@@ -111,6 +126,34 @@ describe("isActionable", () => {
 		expect(isActionable(approvalFixture({ expires_at: null }), NOW)).toBe(
 			true,
 		);
+	});
+
+	it("treats an unparseable expiry as no expiry", () => {
+		expect(
+			isActionable(approvalFixture({ expires_at: "not-a-date" }), NOW),
+		).toBe(true);
+	});
+
+	it("treats expiry exactly at now as expired", () => {
+		expect(
+			isActionable(
+				approvalFixture({
+					expires_at: new Date(NOW).toISOString(),
+				}),
+				NOW,
+			),
+		).toBe(false);
+	});
+
+	it("treats expiry one millisecond in the future as live", () => {
+		expect(
+			isActionable(
+				approvalFixture({
+					expires_at: new Date(NOW + 1).toISOString(),
+				}),
+				NOW,
+			),
+		).toBe(true);
 	});
 });
 

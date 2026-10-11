@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { ApprovalRequest } from "@/api/approvals";
 import { approvalsApi } from "@/api/approvals";
@@ -46,6 +46,10 @@ export function ActionButtons() {
 	const [confirmingId, setConfirmingId] = useState<string | null>(null);
 	const [busyId, setBusyId] = useState<string | null>(null);
 	const [errorId, setErrorId] = useState<string | null>(null);
+	// Synchronous re-entrancy guard: state updates do not land between two
+	// rapid taps, so a ref is the only thing that reliably blocks the
+	// second one. busyId stays as the visual state.
+	const busyRef = useRef(false);
 
 	// Dismissals are scoped to the current pending set: new approvals
 	// bring the row back.
@@ -79,7 +83,7 @@ export function ActionButtons() {
 	};
 
 	const approve = async (approval: ApprovalRequest) => {
-		if (busyId) return;
+		if (busyRef.current) return;
 		if (
 			approval.requires_double_confirmation &&
 			confirmingId !== approval.id
@@ -90,6 +94,7 @@ export function ActionButtons() {
 			setConfirmingId(approval.id);
 			return;
 		}
+		busyRef.current = true;
 		setBusyId(approval.id);
 		setErrorId(null);
 		try {
@@ -115,6 +120,7 @@ export function ActionButtons() {
 				).catch(() => undefined);
 			}
 		} finally {
+			busyRef.current = false;
 			setBusyId(null);
 			setConfirmingId((current) =>
 				current === approval.id ? null : current,
