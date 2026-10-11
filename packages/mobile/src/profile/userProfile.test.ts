@@ -241,6 +241,18 @@ describe("validateUserProfile", () => {
 		expect(validateUserProfile(p)).toEqual([]);
 	});
 
+	it("rejects a two-digit year that Date would remap to the 1900s", () => {
+		// new Date(99, 5, 15) means 1999, not year 99: the round-trip
+		// must catch the year mismatch. Kills the mutant that drops the
+		// getFullYear() comparison.
+		const p = setProfileField(
+			emptyUserProfile(),
+			"identity.birthday",
+			"0099-06-15",
+		);
+		expect(validateUserProfile(p)).toHaveLength(1);
+	});
+
 	it("does not flag other free-text fields", () => {
 		const p: UserProfile = {
 			identity: { displayName: "Ada!", nickname: "@#$", birthday: "" },
